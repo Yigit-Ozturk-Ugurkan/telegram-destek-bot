@@ -1,0 +1,100 @@
+{# =====================================================================
+   SAĞ PANEL — Öncelik/SLA + Aktif ekip.
+
+   A10: Bu panel SALT OKUNUR bir hızlı referanstır.
+     - Teknisyen yönetimi BURADAN YAPILMAZ (müsaitlik, uzmanlık, hesap, şifre
+       yalnızca /ekip sayfasında ve yalnızca admin için).
+     - Öncelik/durum DEĞİŞTİRME buradan yapılmaz; onlar drawer'dadır.
+     - Buton gizlemek yetki değildir: yönetim rotaları @auth.admin_required
+       ile korunur, teknisyen POST ederse 403 alır.
+   ===================================================================== #}
+{% from "_sla_badge.html" import minutes_text, priority_badge %}
+{% from "partials/member_avatar.html" import member_avatar %}
+
+{% if ticket is defined and ticket %}
+<aside class="ctx-card" aria-labelledby="ctx-sla-title">
+  <h2 class="ctx-title" id="ctx-sla-title">Öncelik ve SLA</h2>
+
+  <p class="priority-row">{{ priority_badge(sla.priority, PRIORITY_LABELS) }}</p>
+
+  {% if sla.started %}
+    {% if sla.is_paused %}
+      <p class="ctx-line">SLA duraklatıldı — kullanıcı yanıtı bekleniyor.</p>
+    {% endif %}
+
+    {% if sla.first_response_status != 'met' %}
+      <p class="ctx-line">İlk yanıt:</p>
+      <p class="ctx-value {{ 'is-late' if sla.first_response_level == 'overdue' else '' }}">
+        {%- if sla.first_response_status == 'overdue' -%}
+          {{ minutes_text(sla.minutes_to_first_response) }} gecikti
+        {%- else -%}
+          {{ minutes_text(sla.minutes_to_first_response) }} kaldı
+        {%- endif -%}
+      </p>
+    {% else %}
+      <p class="ctx-line">İlk yanıt: <span class="ctx-value">karşılandı</span></p>
+    {% endif %}
+
+    <p class="ctx-line" style="margin-top:8px;">Çözüm:</p>
+    <p class="ctx-value {{ 'is-late' if sla.resolution_level == 'overdue' else '' }}">
+      {%- if sla.resolution_status == 'overdue' -%}
+        {{ minutes_text(sla.minutes_to_resolution) }} gecikti
+      {%- elif sla.resolution_status == 'met' -%}karşılandı
+      {%- else -%}{{ minutes_text(sla.minutes_to_resolution) }} kaldı{%- endif -%}
+    </p>
+
+    {% if calendar_status %}
+    <p class="calendar-status calendar-{{ calendar_status.state }}"
+       style="margin-top:10px;">SLA Takvimi: {{ calendar_status.label }}</p>
+    {% endif %}
+  {% else %}
+    <p class="ctx-line">SLA henüz başlamadı — talep AI tarafından yürütülüyor.</p>
+  {% endif %}
+
+  <hr class="ctx-divider">
+
+  <h2 class="ctx-title">Aktif ekip</h2>
+  {# Müsaitlik, zaten context'e enjekte edilmiş team_rail verisinden
+     teknisyen id'sine göre okunur — EK SORGU YOK. Eskiden burada herkes
+     sabit yeşil nokta ile gösteriliyordu; bu, meşgul bir kişiyi de "müsait"
+     gibi gösterdiği için yanıltıcıydı. #}
+  {% set availability = {} %}
+  {% for member in team_rail %}
+    {% set _ = availability.update({member.id: member.available}) %}
+  {% endfor %}
+
+  {% if assignments or collaborators or ticket.technician_name %}
+    <ul class="team-rail-list">
+      {# Satır yapısı genel Aktif Ekip rail'iyle AYNIDIR (kompakt):
+         [avatar●] Ad Soyad / rol. Ek metadata gösterilmez. #}
+      {% if ticket.technician_name %}
+      <li class="team-rail-card">
+        {{ member_avatar(ticket.technician_name,
+                         availability.get(ticket.assigned_technician_id),
+                         ticket.assigned_technician_id) }}
+        <span class="team-rail-body">
+          <span class="team-rail-name">{{ ticket.technician_name }}</span>
+          <span class="team-rail-role">{{ ROLE_LABELS[ROLE_PRIMARY] }}</span>
+        </span>
+      </li>
+      {% endif %}
+      {% for c in collaborators %}
+      <li class="team-rail-card">
+        {{ member_avatar(c.technician_name, availability.get(c.technician_id),
+                         c.technician_id) }}
+        <span class="team-rail-body">
+          <span class="team-rail-name">{{ c.technician_name }}</span>
+          <span class="team-rail-role">{{ ROLE_LABELS[ROLE_COLLABORATOR] }}</span>
+        </span>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="team-rail-empty">Bu talebe henüz kimse atanmadı.</p>
+  {% endif %}
+  <p class="ctx-hint">Bu liste salt okunurdur. Ekip değişikliği talep ayarlarından yapılır.</p>
+</aside>
+{% endif %}
+
+{# Ekip genel görünümü — admin ve teknisyen için AYNI salt-okunur panel. #}
+{% include "_team_rail.html" %}

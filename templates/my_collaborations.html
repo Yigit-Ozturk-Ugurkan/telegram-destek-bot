@@ -1,0 +1,35 @@
+{% extends "workspace_base.html" %}
+{% from "partials/ticket_list_panel.html" import ticket_list_panel %}
+
+{% block title %}Destek Verdiklerim — Destek Masası{% endblock %}
+
+{# =====================================================================
+   TECHNICIAN — DESTEK VERDİKLERİM (COLLABORATOR)
+
+   Ana sorumlu olduğu talepler bu listede GÖRÜNMEZ (PRIMARY aynı anda
+   COLLABORATOR olamaz). Yetkilendirme db.list_collaborator_tickets
+   sorgusundadır.
+   ===================================================================== #}
+
+{% block ws_list %}
+  {{ ticket_list_panel(
+       tickets, 'my_collaborations', group,
+       title='Destek verdiklerim',
+       subtitle='Yardımcı teknik personel olduğunuz talepler',
+       empty_message='Bu filtrede yardımcı olduğunuz talep yok.') }}
+{% endblock %}
+
+{% block ws_main %}
+<div class="convo-empty">
+  <h2>Bir talep seçin</h2>
+  <p>
+    Bu taleplerin ana sorumlusu başka bir ekip üyesidir; geçmişi görebilir ve
+    yanıt yazabilirsiniz, ancak durum değiştirme ve devir yetkisi ana
+    sorumludadır.
+  </p>
+</div>
+{% endblock %}
+
+{% block ws_context %}
+  {% include "partials/context_panel.html" %}
+{% endblock %}

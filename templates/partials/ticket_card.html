@@ -1,0 +1,42 @@
+{# =====================================================================
+   TICKET KARTI — sol paneldeki tek talep satırı.
+
+   Her kart: avatar/initial · başlık · geçen süre · kategori ·
+             priority badge · status badge · (varsa) Yeni mesaj badge
+
+   YETKİLENDİRME BURADA YAPILMAZ. Hangi talebin listeleneceğine SQL karar
+   verir (db.list_admin_tickets_filtered / list_technician_tickets /
+   list_collaborator_tickets). Bu dosya yalnızca SUNUMDUR.
+   ===================================================================== #}
+{% from "_sla_badge.html" import priority_badge %}
+
+{% macro ticket_card(t, selected_id=None) %}
+{% set is_resolved = t.status == STATUS.CLOSED %}
+<li>
+  <a class="tcard{{ ' is-selected' if selected_id and t.id == selected_id else '' }}{{ ' is-resolved' if is_resolved else '' }}"
+     href="{{ url_for('ticket_detail', ticket_id=t.id) }}"
+     {{ 'aria-current="true"'|safe if selected_id and t.id == selected_id else '' }}>
+
+    <span class="tcard-top">
+      <span class="mini-avatar" style="background:{{ t.full_name|avatar_color }};"
+            aria-hidden="true">{{ t.full_name|avatar_initials }}</span>
+
+      <span class="tcard-body">
+        <span class="tcard-title">{{ t.subject }}</span>
+        {% if t.category %}<span class="tcard-category">{{ t.category }}</span>{% endif %}
+      </span>
+
+      <span class="tcard-time">{{ t.updated_at|elapsed }}</span>
+    </span>
+
+    <span class="tcard-badges">
+      {# Öncelik rozeti HER ZAMAN gösterilir — kısa kod (P1..P4) dar kolonda
+         okunur kalır, tam etiket sağ panelde ve drawer'da bulunur. #}
+      {{ priority_badge(t.sla.priority if t.sla else t.priority,
+                        {'P1':'P1','P2':'P2','P3':'P3','P4':'P4'}) }}
+      <span class="status-pill status-{{ t.status }}">{{ STATUS_LABELS[t.status] }}</span>
+      {% if t.has_unread %}<span class="unread-badge">Yeni mesaj</span>{% endif %}
+    </span>
+  </a>
+</li>
+{% endmacro %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{# =====================================================================
+   TALEPLER EKRANI DÜZENİ (A4)
+
+       250px  |  minmax(0, 1fr)  |  ~240px
+       liste  |  conversation    |  öncelik/SLA + aktif ekip
+
+   Orta kolon en önemli ve en geniş alandır. Üç ekran bu düzeni paylaşır:
+   /tickets (admin), /my-tickets, /collaborations ve /ticket/<id>.
+
+   Rotalar DEĞİŞMEDİ: soldaki kartlar mevcut ticket_detail rotasına gider,
+   filtreler mevcut ?status= query-param mekanizmasını kullanır.
+   ===================================================================== #}
+{% block layout %}
+<div class="flash-region">{% include "_flash.html" %}</div>
+
+<main class="workspace" id="main">
+  <div class="ws-list">{% block ws_list %}{% endblock %}</div>
+  <div class="ws-main">{% block ws_main %}{% endblock %}</div>
+  <div class="ws-context">{% block ws_context %}{% endblock %}</div>
+</main>
+
+{# Drawer overlay/panel ızgaranın DIŞINDA durur: position:fixed olduğu için
+   grid akışını etkilemez ve mobilde tam genişliğe açılır. #}
+{% block after_workspace %}{% endblock %}
+{% endblock %}

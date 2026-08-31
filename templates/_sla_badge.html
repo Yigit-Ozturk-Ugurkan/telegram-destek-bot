@@ -1,0 +1,30 @@
+{# SLA rozeti — RENGE TEK BASINA GUVENILMEZ, metin de her zaman gosterilir. #}
+{% macro minutes_text(minutes) -%}
+  {%- if minutes is none -%}—
+  {%- else -%}
+    {%- set abs_m = minutes if minutes >= 0 else -minutes -%}
+    {%- if abs_m >= 60 -%}{{ abs_m // 60 }} sa {{ abs_m % 60 }} dk
+    {%- else -%}{{ abs_m }} dk{%- endif -%}
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro sla_line(label, status, level, minutes) %}
+<span class="sla-item sla-{{ level }}">
+  <span class="sla-label">{{ label }}</span>
+  <span class="sla-value">
+    {%- if status == 'met' %}karşılandı
+    {%- elif status == 'overdue' %}{{ minutes_text(minutes) }} gecikti
+    {%- elif minutes is none %}başlamadı
+    {%- else %}{{ minutes_text(minutes) }} kaldı{% endif -%}
+  </span>
+</span>
+{% endmacro %}
+
+{% macro priority_badge(priority, labels) %}
+<span class="priority-badge priority-{{ priority }}">{{ labels.get(priority, priority) }}</span>
+{% endmacro %}
+
+{# sla_compact: FRONTEND DESIGN REVISION'da ticket kartı kendi rozetlerini
+   (priority_badge + status-pill) çizdiği için ARTIK KULLANILMIYOR. Yalnızca
+   sunum makrosuydu; kaldırıldı. SLA hesabı db.get_sla_state()'tedir ve
+   DEĞİŞMEDİ. #}

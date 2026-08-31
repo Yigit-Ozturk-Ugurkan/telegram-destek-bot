@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Giriş — Destek Masası{% endblock %}
+
+{# =====================================================================
+   LOGIN (A12)
+
+   Aynı pastel dış gradient, ortada ~360px beyaz kart.
+   Auth / session / rate-limit davranışına DOKUNULMADI — bu yalnızca görsel
+   bir revizyondur. "Şifremi unuttum" rotası projede olmadığı için ÖLÜ LİNK
+   eklenmemiştir.
+   ===================================================================== #}
+{% block layout %}
+<main class="login-wrap" id="main">
+  <div class="login-card">
+    <div class="ticket-stub">
+      <span class="stub-hash" aria-hidden="true">#</span>
+      <span class="stub-label">DESTEK MASASI</span>
+    </div>
+
+    <h1>Tekrar hoş geldiniz</h1>
+    <p class="muted">Panel hesabınızla giriş yapın.</p>
+
+    {% include "_flash.html" %}
+
+    <form method="post" data-guard>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="username">Kullanıcı adı</label>
+      <input type="text" id="username" name="username"
+             autocomplete="username" autofocus required>
+      <label for="password">Şifre</label>
+      <input type="password" id="password" name="password"
+             autocomplete="current-password" required>
+      <button type="submit" class="btn btn-primary btn-block"
+              data-pending-label="Giriş yapılıyor…">Giriş Yap</button>
+    </form>
+  </div>
+</main>
+{% endblock %}

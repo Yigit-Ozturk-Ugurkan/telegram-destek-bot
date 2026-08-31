@@ -1,0 +1,514 @@
+{# =====================================================================
+   TICKET SETTINGS DRAWER — sağdan slide-over (A11).
+
+   HER ZAMAN AÇIK:
+     1. Durum
+     2. Öncelik ve SLA
+     3. Ana sorumlu  (yetkiye göre: Devret / Yardımcı ekle)
+
+   VARSAYILAN KAPALI ACCORDION:
+     4. SLA geçmişi
+     5. AI özeti
+     6. Dahili not
+
+   BACKEND SÖZLEŞMESİ — DEĞİŞMEDİ:
+     Buradaki formların hepsi MEVCUT Flask rotalarına POST eder. Yeni endpoint
+     yazılmadı, iş mantığı Jinja'ya taşınmadı.
+       /ticket/<id>/status        durum
+       /ticket/<id>/oncelik       öncelik (admin override -> priority_source=manual)
+       /ticket/<id>/devret        ownership transfer (gerekçe zorunlu)
+       /ticket/<id>/yardimci      COLLABORATOR ekle
+       /ticket/<id>/yardimci/<t>/kaldir
+       /ticket/<id>/ozet          AI özeti (Telegram'a HİÇBİR ŞEY göndermez)
+       /ticket/<id>/dahili-not    dahili not (Telegram'a GİTMEZ)
+       /ticket/<id>/assign        ilk atama (admin)
+       /ticket/<id>/yonlendirme   manuel triyaj yönlendirmesi (admin)
+
+     csrf_token + form_token HER formda ZORUNLUDUR.
+
+   YETKİ: `can_manage` ile buton gizlemek bir KOLAYLIKTIR, güvenlik değildir.
+   Rotalar auth.require_manage_ticket() / @auth.admin_required ile korunur.
+   ===================================================================== #}
+{% from "_sla_badge.html" import sla_line, priority_badge %}
+{% from "partials/member_avatar.html" import member_avatar %}
+
+<div class="drawer-overlay" data-drawer-overlay="ticket-settings" hidden></div>
+
+<aside class="drawer" id="ticket-settings" role="dialog" aria-modal="true"
+       aria-labelledby="drawer-title" hidden>
+
+  <div class="drawer-head">
+    <h2 id="drawer-title">Talep ayarları</h2>
+    <button type="button" class="drawer-close" data-drawer-close="ticket-settings">
+      <span aria-hidden="true">&#10005;</span>
+      <span class="sr-only">Kapat</span>
+    </button>
+  </div>
+
+  <div class="drawer-body">
+
+    {# ---------- 1. DURUM (her zaman açık) ---------- #}
+    <section class="drawer-section">
+      <h3>Durum</h3>
+      {% if not can_manage %}
+        <p class="status-pill status-{{ ticket.status }}">{{ STATUS_LABELS[ticket.status] }}</p>
+        <p class="field-hint">
+          Yardımcı teknik personel olarak talebi görüntüleyebilir ve yanıt
+          yazabilirsiniz; durum değiştirme ve devir yetkisi ana sorumludadır.
+        </p>
+      {% elif ticket.status == STATUS.CLOSED %}
+        <p class="muted">Talep çözülmüş. Durum değiştirmek için önce yeniden açın.</p>
+        <form method="post" action="{{ url_for('reopen', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <button type="submit" class="btn btn-secondary btn-block"
+                  data-pending-label="Açılıyor…">Talebi Yeniden Aç</button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('change_status', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <label for="status">Yeni durum</label>
+          <select id="status" name="status" aria-describedby="status_hint"
+                  data-confirm-value="{{ STATUS.CLOSED }}"
+                  data-confirm-message="Talep #{{ ticket.id }} çözüldü olarak işaretlenecek ve talep sahibine bildirim gönderilecek. Devam edilsin mi?">
+            <option value="{{ STATUS.IN_PROGRESS }}" {{ 'selected' if ticket.status == STATUS.IN_PROGRESS else '' }}>{{ STATUS_LABELS[STATUS.IN_PROGRESS] }}</option>
+            <option value="{{ STATUS.WAITING }}" {{ 'selected' if ticket.status == STATUS.WAITING else '' }}>{{ STATUS_LABELS[STATUS.WAITING] }}</option>
+            <option value="{{ STATUS.CLOSED }}">{{ STATUS_LABELS[STATUS.CLOSED] }}</option>
+          </select>
+          <p class="field-hint" id="status_hint">Her durum değişikliği talep sahibine bildirim olarak gider.</p>
+          <button type="submit" class="btn btn-primary btn-block"
+                  data-pending-label="Güncelleniyor…">Durumu Güncelle</button>
+        </form>
+      {% endif %}
+    </section>
+
+    {# ---------- 2. ÖNCELİK VE SLA (her zaman açık) ---------- #}
+    <section class="drawer-section">
+      <h3>Öncelik ve SLA</h3>
+      <p class="priority-row">{{ priority_badge(sla.priority, PRIORITY_LABELS) }}</p>
+
+      {% if sla.started %}
+        {% if sla.is_paused %}
+          <p class="sla-paused">
+            SLA duraklatıldı — kullanıcı yanıtı bekleniyor. Kalan süre,
+            kullanıcı yazana kadar ilerlemez.
+          </p>
+        {% endif %}
+        <div class="sla-block">
+          {{ sla_line('İlk Yanıt SLA', sla.first_response_status,
+                      sla.first_response_level, sla.minutes_to_first_response) }}
+          {{ sla_line('Çözüm SLA', sla.resolution_status,
+                      sla.resolution_level, sla.minutes_to_resolution) }}
+        </div>
+        <p class="calendar-status calendar-{{ calendar_status.state }}">
+          SLA Takvimi: {{ calendar_status.label }}
+        </p>
+        <p class="field-hint">
+          SLA başlangıcı: {{ sla.started_at }}
+          {%- if sla.effective_started_at and sla.effective_started_at != sla.started_at %}
+            · İlk SLA çalışma anı: {{ sla.effective_started_at }}{% endif %}
+          {%- if sla.cycle_number %} · Cycle #{{ sla.cycle_number }}{% endif %}
+          {%- if sla.total_paused_seconds %} · Toplam duraklama:
+            {{ (sla.total_paused_seconds // 60) }} dk{% endif %}
+        </p>
+      {% else %}
+        <p class="muted">SLA henüz başlamadı — talep AI tarafından yürütülüyor.</p>
+        <p class="field-hint">Saat, talep teknik ekibe aktarıldığında başlar.</p>
+      {% endif %}
+
+      {# AI öncelik önerisi — YALNIZCA iç panelde. Telegram kullanıcısına
+         gönderilen hiçbir metin bu alanı kullanmaz (§B3). #}
+      {% if ai_priority %}
+      <p class="ai-priority-note">
+        <strong>AI öncelik önerisi:</strong> {{ ai_priority.suggested_priority }}
+        {%- if ai_priority.overridden %} (elle {{ sla.priority }} yapıldı){% endif %}
+        {%- if ai_priority.reason %}<br>{{ ai_priority.reason }}{% endif %}
+      </p>
+      {% endif %}
+
+      {% if can_manage and ticket.status != STATUS.CLOSED %}
+      <form method="post" action="{{ url_for('change_priority', ticket_id=ticket.id) }}" data-guard>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_token" value="{{ form_token() }}">
+        <label for="priority">Önceliği değiştir</label>
+        <select id="priority" name="priority">
+          {% for p in PRIORITIES %}
+            <option value="{{ p }}" {{ 'selected' if p == sla.priority else '' }}>
+              {{ PRIORITY_LABELS[p] }}
+            </option>
+          {% endfor %}
+        </select>
+        <p class="field-hint">
+          Son tarihler yeni önceliğe göre yeniden hesaplanır; SLA başlangıç
+          zamanı değişmez. Elle belirlenen öncelik AI tarafından geri alınmaz.
+        </p>
+        <button type="submit" class="btn btn-secondary btn-block"
+                data-pending-label="Güncelleniyor…">Önceliği Güncelle</button>
+      </form>
+      {% elif not can_manage %}
+        <p class="field-hint">Önceliği yalnızca ana sorumlu ve yöneticiler değiştirebilir.</p>
+      {% endif %}
+    </section>
+
+    {# ---------- 3. ANA SORUMLU (her zaman açık) ----------
+
+         AVATAR TUTARLILIĞI: burada eskiden ayrı bir `.mini-avatar` initials
+         rozeti vardı; aynı kişi rail'de illüstratif, drawer'da harfli
+         görünüyordu. Artık üç yer de TEK bileşeni kullanır
+         (partials/member_avatar.html), dolayısıyla aynı technician_id her
+         yerde AYNI illüstratif avatarı alır.
+
+         Müsaitlik, zaten context'e enjekte edilmiş team_rail verisinden
+         okunur — EK SORGU YOK, N+1 YOK (context_panel ile aynı desen). #}
+    {% set availability = {} %}
+    {% for member in team_rail %}
+      {% set _ = availability.update({member.id: member.available}) %}
+    {% endfor %}
+
+    <section class="drawer-section">
+      <h3>Ana sorumlu</h3>
+      {% if ticket.technician_name %}
+        <p class="assignee-name">
+          {{ member_avatar(ticket.technician_name,
+                           availability.get(ticket.assigned_technician_id),
+                           ticket.assigned_technician_id) }}
+          {{ ticket.technician_name }}
+        </p>
+        {% if ticket.technician_department %}
+          <p class="muted assignee-dept">{{ ticket.technician_department }}</p>
+        {% endif %}
+      {% elif ticket.assigned_admin_name %}
+        {# Legacy kayıt: teknisyen ilişkisi yok -> technician_id de yok.
+           member_avatar bu durumda illüstratif avatar basmaz ve initials
+           fallback'ine düşer. #}
+        <p class="assignee-name">
+          {{ member_avatar(ticket.assigned_admin_name) }}
+          {{ ticket.assigned_admin_name }}
+          <span class="legacy-tag" title="Eski kayıt: ilişkisel atama yok">eski kayıt</span>
+        </p>
+      {% else %}
+        <p class="muted">Henüz atanmadı.</p>
+      {% endif %}
+
+      {% if my_role == ROLE_COLLABORATOR %}
+        <p class="role-banner">Bu talepte rolünüz: <strong>{{ ROLE_LABELS[ROLE_COLLABORATOR] }}</strong></p>
+      {% elif my_role == ROLE_PRIMARY %}
+        <p class="role-banner is-primary">Bu talepte rolünüz: <strong>{{ ROLE_LABELS[ROLE_PRIMARY] }}</strong></p>
+      {% endif %}
+
+      {# İlk atama (ana sorumlu YOKKEN) yalnızca admindedir. #}
+      {% if current_user.is_admin and not ticket.assigned_technician_id
+            and ticket.status != STATUS.CLOSED %}
+      <details class="account-box">
+        <summary>Teknisyene ata</summary>
+        <form method="post" action="{{ url_for('assign', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <label for="technician_id">Teknisyen</label>
+          <select id="technician_id" name="technician_id" required>
+            {% for t in technicians %}
+              <option value="{{ t.id }}">
+                {{ t.name }} — {{ t.department }}{{ '' if t.available else ' (meşgul)' }}
+              </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="btn btn-secondary btn-block"
+                  data-pending-label="Atanıyor…">Ata</button>
+        </form>
+      </details>
+      {% endif %}
+
+      {# Ownership transfer — 'Yardımcı ekle' DEĞİLDİR; gerekçe ZORUNLUDUR. #}
+      {% if can_manage and ticket.assigned_technician_id and ticket.status != STATUS.CLOSED %}
+      <details class="account-box">
+        <summary>Devret</summary>
+        <form method="post" action="{{ url_for('transfer_primary', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <label for="transfer_id">Yeni ana sorumlu</label>
+          <select id="transfer_id" name="technician_id" required>
+            {% for t in collaborator_candidates %}
+              <option value="{{ t.id }}">{{ t.name }} — {{ t.department }} · {{ t.active_ticket_count }} aktif</option>
+            {% endfor %}
+            {% for c in collaborators %}
+              <option value="{{ c.technician_id }}">{{ c.technician_name }} (mevcut yardımcı)</option>
+            {% endfor %}
+          </select>
+          <label for="transfer_reason">Devir gerekçesi</label>
+          <textarea id="transfer_reason" name="reason" rows="2"
+                    minlength="{{ transfer_reason_min }}"
+                    placeholder="Örn. Vardiya değişimi" required></textarea>
+          <p class="field-hint">
+            Gerekçe zorunludur. Devir gerçek bir sahiplik değişimidir; eski ana
+            sorumlu otomatik olarak yardımcı YAPILMAZ.
+          </p>
+          <button type="submit" class="btn btn-secondary btn-block"
+                  data-pending-label="Devrediliyor…">Sorumluluğu Devret</button>
+        </form>
+      </details>
+      {% endif %}
+
+      <h4 class="sub-title">Yardımcı teknik personel</h4>
+      {% if collaborators %}
+        <ul class="collab-list">
+          {% for c in collaborators %}
+          <li class="collab-item">
+            <span class="collab-body">
+              <span class="collab-name">{{ c.technician_name }}</span>
+              <span class="collab-dept">{{ c.technician_department }}</span>
+              {% if c.assigned_by_name %}
+                <span class="collab-meta">{{ c.assigned_by_name }} ekledi · {{ c.assigned_at }}</span>
+              {% endif %}
+            </span>
+            {% if can_manage %}
+            <form method="post" data-guard
+                  action="{{ url_for('collaborator_remove', ticket_id=ticket.id, technician_id=c.technician_id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="form_token" value="{{ form_token() }}">
+              <button type="submit" class="btn btn-secondary btn-sm"
+                      data-pending-label="…">Kaldır</button>
+            </form>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">Yardımcı personel yok.</p>
+      {% endif %}
+
+      {% if can_manage and ticket.status != STATUS.CLOSED %}
+      <details class="account-box">
+        <summary>Yardımcı Ekle</summary>
+        <form method="post" action="{{ url_for('collaborator_add', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <label for="collab_id">Teknik personel</label>
+          <select id="collab_id" name="technician_id" required>
+            {% for t in collaborator_candidates %}
+              <option value="{{ t.id }}">
+                {{ t.name }} — {{ t.department }} · {{ t.active_ticket_count }} aktif · müsait
+                {%- if t.skills %} · {% for s in t.skills %}{{ s.priority }}.{{ s.skill_name }}
+                  {%- if not loop.last %} / {% endif %}{% endfor %}{% endif %}
+              </option>
+            {% endfor %}
+          </select>
+          <p class="field-hint">
+            Yardımcı eklemek ana sorumluluğu DEVRETMEZ. Yalnızca yeni iş almaya
+            açık personel listelenir.
+          </p>
+          <button type="submit" class="btn btn-secondary btn-block"
+                  data-pending-label="Ekleniyor…">Yardımcı Ekle</button>
+        </form>
+      </details>
+      {% endif %}
+    </section>
+
+    {# ---------- YÖNLENDİRME (§8) — yalnızca admin ---------- #}
+    {% if current_user.is_admin %}
+    <details class="drawer-section drawer-accordion">
+      <summary>Yönlendirme</summary>
+      <div class="drawer-accordion-body">
+        <dl class="detail-facts">
+          <div><dt>Dayanak</dt>
+            <dd>
+              {% if routing_basis %}
+                <span class="queue-basis queue-basis-{{ routing_basis|lower }}">{{ routing_basis_label }}</span>
+                {% if routing_summary and routing_basis != MANUAL_TRIAGE %}
+                  <span class="queue-basis-target">{{ routing_summary }}</span>
+                {% endif %}
+              {% else %}<span class="muted">—</span>{% endif %}
+            </dd></div>
+          <div><dt>Kategori</dt><dd>{{ ticket.category or '—' }}</dd></div>
+          <div><dt>Gerekli uzmanlık</dt>
+            <dd>{% if ticket.required_skill_code %}{{ required_skill_name or ticket.required_skill_code }}
+                {%- else %}<span class="muted">Tespit edilmedi</span>{% endif %}</dd></div>
+          <div><dt>AI denemesi</dt><dd>{{ ticket.ai_attempt_count or 0 }} / {{ max_ai_attempts }}</dd></div>
+          <div><dt>AI modu</dt>
+            <dd><span class="ai-mode-tag {{ 'is-human' if ai_mode == AI_MODE_HUMAN else 'is-ai' }}">{{ ai_mode_label }}</span></dd></div>
+        </dl>
+
+        {% if ticket.status != STATUS.CLOSED %}
+        {% if routing_basis == MANUAL_TRIAGE %}
+        <p class="field-hint">
+          Bu talep otomatik sınıflandırılamadı. Otomatik olarak genel desteğe
+          <strong>gönderilmez</strong>; doğru uzmanlığı ya da departmanı siz
+          belirlersiniz.
+        </p>
+        {% endif %}
+        <form method="post" action="{{ url_for('set_routing', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <label for="routing_skill_code">Uzmanlık</label>
+          <select id="routing_skill_code" name="skill_code">
+            <option value="">— seçilmedi —</option>
+            {% for sk in skills %}
+              <option value="{{ sk.code }}"
+                {{ 'selected' if sk.code == ticket.required_skill_code else '' }}>{{ sk.name }}</option>
+            {% endfor %}
+          </select>
+          <label for="routing_department">Departman</label>
+          <select id="routing_department" name="department">
+            <option value="">— seçilmedi —</option>
+            {% for d in DEPARTMENTS %}
+              <option value="{{ d }}"
+                {{ 'selected' if d == (ticket.pending_department or ticket.category) else '' }}>{{ d }}</option>
+            {% endfor %}
+          </select>
+          <p class="field-hint">
+            İkisi birden seçilirse uzmanlık kazanır (belirli uzmanlık en yüksek
+            önceliktir). Uygun kişi yoksa talep kendi kuyruğunda bekler.
+          </p>
+          <button type="submit" class="btn btn-secondary btn-block"
+                  data-pending-label="Yönlendiriliyor…">Yönlendirmeyi Kaydet</button>
+        </form>
+        {% endif %}
+      </div>
+    </details>
+    {% endif %}
+
+    {# ---------- 4. SLA GEÇMİŞİ (varsayılan KAPALI) ---------- #}
+    {% if cycle_states %}
+    <details class="drawer-section drawer-accordion">
+      <summary>SLA geçmişi</summary>
+      <div class="drawer-accordion-body">
+        <ol class="cycle-list">
+          {% for c in cycle_states %}
+          <li class="cycle-item {{ 'is-active' if c.is_active else '' }}">
+            <p class="cycle-head">
+              <span class="cycle-no">Cycle #{{ c.cycle_number }}</span>
+              <span class="cycle-state">
+                {%- if c.is_active and c.is_paused %}Duraklatıldı
+                {%- elif c.is_active %}Aktif
+                {%- else %}Çözüldü{% endif -%}
+              </span>
+              {{ priority_badge(c.priority, PRIORITY_LABELS) }}
+            </p>
+            <dl class="cycle-facts">
+              <div><dt>Başlangıç</dt><dd>{{ c.started_at }}</dd></div>
+              {% if c.first_staff_response_at %}
+                <div><dt>İlk yanıt</dt>
+                  <dd>{{ c.first_staff_response_at }}
+                    <span class="sla-item sla-{{ c.first_response_level }}">
+                      {{- 'Karşılandı' if c.first_response_status == 'met' else 'Gecikti' -}}
+                    </span></dd></div>
+              {% else %}
+                <div><dt>İlk yanıt</dt><dd><span class="muted">Henüz yok</span></dd></div>
+              {% endif %}
+              {% if c.total_paused_seconds %}
+                <div><dt>Kullanıcı beklemesi</dt>
+                  <dd>{{ (c.total_paused_seconds // 60) }} dk gerçek
+                    {%- if c.calendar_mode == 'BUSINESS_HOURS_V1' %}
+                      · {{ (c.total_sla_paused_seconds // 60) }} dk SLA etkili
+                    {%- endif %}</dd></div>
+              {% endif %}
+              {% if c.closed_at %}
+                <div><dt>Çözüm</dt>
+                  <dd>{{ c.closed_at }}
+                    <span class="sla-item sla-{{ c.resolution_level }}">
+                      {{- 'Karşılandı' if c.resolution_status == 'met' else 'Gecikti' -}}
+                    </span></dd></div>
+              {% endif %}
+            </dl>
+          </li>
+          {% endfor %}
+        </ol>
+        <p class="field-hint">
+          Yeniden açılan talepler yeni bir SLA cycle'ı başlatır; kapanmış
+          cycle'lar değiştirilmez.
+        </p>
+      </div>
+    </details>
+    {% endif %}
+
+    {# ---------- 5. AI ÖZETİ (varsayılan KAPALI) ---------- #}
+    <details class="drawer-section drawer-accordion">
+      <summary>AI özeti</summary>
+      <div class="drawer-accordion-body">
+        {% if ai_summary and ai_summary.summary %}
+          {% if ai_summary.is_stale %}
+            <p class="stale-note">Yeni mesajlar var — özet güncel olmayabilir.</p>
+          {% endif %}
+          {% set s = ai_summary.summary %}
+          <dl class="summary-block">
+            {% if s.problem %}<dt>Sorun</dt><dd>{{ s.problem }}</dd>{% endif %}
+            {% if s.attempted_solutions %}
+              <dt>Denenen çözümler</dt>
+              <dd><ol class="summary-list">
+                {% for x in s.attempted_solutions %}<li>{{ x }}</li>{% endfor %}
+              </ol></dd>
+            {% endif %}
+            {% if s.user_feedback %}<dt>Kullanıcı geri bildirimi</dt><dd>{{ s.user_feedback }}</dd>{% endif %}
+            {% if s.current_status %}<dt>Mevcut durum</dt><dd>{{ s.current_status }}</dd>{% endif %}
+            {% if s.technical_findings %}
+              <dt>Teknik bulgular</dt>
+              <dd><ul class="summary-list">
+                {% for x in s.technical_findings %}<li>{{ x }}</li>{% endfor %}
+              </ul></dd>
+            {% endif %}
+            {% if s.recommended_next_step %}
+              <dt>Önerilen sonraki adım</dt><dd>{{ s.recommended_next_step }}</dd>
+            {% endif %}
+          </dl>
+          <p class="summary-meta">
+            {{ ai_summary.generated_at }}
+            {%- if ai_summary.generated_by_name %} · {{ ai_summary.generated_by_name }}{% endif %}
+          </p>
+        {% else %}
+          <p class="muted">Henüz özet oluşturulmadı.</p>
+        {% endif %}
+
+        <form method="post" action="{{ url_for('ai_summary_generate', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <button type="submit" class="btn btn-secondary btn-block" data-pending-label="Özetleniyor…">
+            {{ 'Özeti Yenile' if ai_summary else 'AI Özeti Oluştur' }}
+          </button>
+        </form>
+        <p class="field-hint">
+          Özet yalnızca teknik ekibe gösterilir; talep sahibine gönderilmez ve
+          talebin durumunu değiştirmez.
+        </p>
+      </div>
+    </details>
+
+    {# ---------- 6. DAHİLİ NOT (varsayılan KAPALI) ----------
+         AYRI form, AYRI rota. Telegram'a GİTMEZ — internal_note_add()
+         send_telegram_message() ÇAĞIRMAZ. #}
+    <details class="drawer-section drawer-accordion">
+      <summary>Dahili not</summary>
+      <div class="drawer-accordion-body">
+        <form method="post"
+              action="{{ url_for('internal_note_add', ticket_id=ticket.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <label for="note"><span class="note-badge">Dahili Not</span> Yalnızca teknik ekip görür</label>
+          <textarea id="note" name="note" rows="3" aria-describedby="note_hint" required></textarea>
+          <p class="field-hint" id="note_hint">
+            Bu not talep sahibine <strong>gönderilmez</strong>; yalnızca ana sorumlu,
+            yardımcı personel ve yöneticiler görür.
+          </p>
+          <button type="submit" class="btn btn-secondary btn-block"
+                  data-pending-label="Kaydediliyor…">Dahili Not Ekle</button>
+        </form>
+      </div>
+    </details>
+
+    {# ---------- Talep künyesi ---------- #}
+    <section class="drawer-section">
+      <h3>Talep bilgisi</h3>
+      <dl class="detail-facts">
+        <div><dt>Talep sahibi</dt>
+          <dd>{{ ticket.full_name }}{% if ticket.username %} (@{{ ticket.username }}){% endif %}</dd></div>
+        <div><dt>Oluşturulma</dt><dd>{{ ticket.created_at }}</dd></div>
+        {% if ticket.resolved_at %}
+        <div><dt>Çözülme</dt>
+          <dd>{{ ticket.resolved_at }}
+            {%- if resolver_name %} · {{ resolver_name }}{% endif %}
+            {%- if resolved_source_label %} <span class="source-tag">{{ resolved_source_label }}</span>{% endif %}</dd></div>
+        {% endif %}
+      </dl>
+    </section>
+
+  </div>
+</aside>

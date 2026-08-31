@@ -1,0 +1,97 @@
+{# =====================================================================
+   NAVBAR — büyük pill, tüm authenticated sayfalarda üstte.
+
+   FRONTEND DESIGN REVISION:
+     - Sol sidebar KALDIRILDI; ana navigasyon buraya taşındı.
+     - Dashboard / Aktif Talepler / Çözülmüş Talepler AYRIMI KALDIRILDI;
+       bunlar artık Talepler ekranındaki segmented control ile yönetilir.
+     - Sağda YALNIZCA kullanıcı avatarı vardır.
+       ARAMA İKONU YOK. BİLDİRİM İKONU YOK. (İşlevi olmayan kontrol eklenmez.)
+     - "Şifremi unuttum" rotası projede olmadığı için ÖLÜ LİNK üretilmez.
+
+   YETKİ: menüyü role göre çizmek bir KOLAYLIKTIR, güvenlik değildir.
+   Yönetim rotaları @auth.admin_required ile korunur; teknisyen URL'yi elle
+   yazsa da 403 alır.
+   ===================================================================== #}
+
+<header class="appbar">
+  <nav class="navbar" aria-label="Ana menü">
+
+    <a class="nav-brand" href="{{ url_for('index') }}">
+      <span class="nav-brand-mark" aria-hidden="true">#</span>
+      <span class="nav-brand-label">Destek Masası</span>
+    </a>
+
+    <div class="nav-tabs" role="list">
+      {% if current_user.is_admin %}
+        <a role="listitem" class="nav-tab {{ 'is-active' if request.endpoint in ('admin_tickets', 'ticket_detail') else '' }}"
+           href="{{ url_for('admin_tickets') }}">
+          Talepler <span class="nav-tab-count">{{ sidebar_counts.all }}</span>
+        </a>
+        <a role="listitem" class="nav-tab {{ 'is-active' if request.endpoint == 'team' else '' }}"
+           href="{{ url_for('team') }}">Ekip</a>
+        <a role="listitem" class="nav-tab {{ 'is-active' if request.endpoint == 'skills' else '' }}"
+           href="{{ url_for('skills') }}">Uzmanlıklar</a>
+        <a role="listitem" class="nav-tab {{ 'is-active' if request.endpoint == 'sla_calendar_page' else '' }}"
+           href="{{ url_for('sla_calendar_page') }}">SLA Takvimi</a>
+      {% else %}
+        <a role="listitem" class="nav-tab {{ 'is-active' if request.endpoint in ('my_tickets', 'ticket_detail') else '' }}"
+           href="{{ url_for('my_tickets') }}">
+          Taleplerim <span class="nav-tab-count">{{ sidebar_counts.active }}</span>
+        </a>
+        <a role="listitem" class="nav-tab {{ 'is-active' if request.endpoint == 'my_collaborations' else '' }}"
+           href="{{ url_for('my_collaborations') }}">
+          Destek Verdiklerim
+          {%- if sidebar_collab_count %} <span class="nav-tab-count">{{ sidebar_collab_count }}</span>{% endif %}
+        </a>
+      {% endif %}
+    </div>
+
+    <div class="nav-user">
+      <button type="button" class="avatar-btn" id="avatar-trigger"
+              aria-haspopup="true" aria-expanded="false" aria-controls="avatar-menu"
+              data-menu-trigger="avatar-menu">
+        <span class="avatar" style="background:{{ current_user.full_name|avatar_color }};"
+              aria-hidden="true">{{ current_user.full_name|avatar_initials }}</span>
+        <span class="sr-only">Hesap menüsü — {{ current_user.full_name }}</span>
+      </button>
+
+      <div class="avatar-menu" id="avatar-menu" role="menu"
+           aria-labelledby="avatar-trigger" hidden>
+        <div class="avatar-menu-head">
+          <p class="avatar-menu-name">{{ current_user.full_name }}</p>
+          <p class="avatar-menu-role">
+            {{ 'Yönetici' if current_user.is_admin else 'Teknik Ekip' }}
+          </p>
+        </div>
+
+        {# Teknisyen KENDİ müsaitliğini buradan değiştirir. Başkasının
+           müsaitliği yalnızca /ekip sayfasındadır (admin). #}
+        {% if current_user.is_technician and sidebar_self %}
+        <form method="post" action="{{ url_for('toggle_own_availability') }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <button type="submit" class="menu-item" role="menuitem"
+                  data-pending-label="Güncelleniyor…">
+            <span class="dot {{ 'dot-available' if sidebar_self.available else 'dot-busy' }}"
+                  aria-hidden="true"></span>
+            {{ 'Müsait' if sidebar_self.available else 'Meşgul' }}
+            <span class="menu-hint">müsaitlik değiştir</span>
+          </button>
+        </form>
+        {% endif %}
+
+        <a class="menu-item" role="menuitem"
+           href="{{ url_for('change_password') }}">Şifremi Değiştir</a>
+
+        <form method="post" action="{{ url_for('logout') }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <button type="submit" class="menu-item" role="menuitem"
+                  data-pending-label="Çıkılıyor…">Çıkış</button>
+        </form>
+      </div>
+    </div>
+
+  </nav>
+</header>

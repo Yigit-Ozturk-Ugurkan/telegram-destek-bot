@@ -1,0 +1,39 @@
+{# =====================================================================
+   EKİP ÜYESİ AVATARI — Aktif Ekip panelinin tek satır bileşeni.
+
+   Satır görünümü:  [avatar●] İsim
+
+   AVATAR KATMANLARI (FRONTEND AVATAR REVISION):
+
+     1) İLLÜSTRATİF AVATAR — static/avatars/av-NN.svg
+        Küçük, düz, yuvarlak, pastel zeminli insan illüstrasyonu.
+        Dosya seçimi webapp.avatar_illustration(technician_id) ile
+        DETERMİNİSTİKTİR: aynı technician_id her render'da ve her ekranda
+        aynı avatarı alır. DB'de avatar kolonu YOKTUR, sorgu ÇALIŞMAZ,
+        harici CDN kullanılmaz.
+
+     2) FALLBACK — initials avatarı
+        <img> her zaman renkli initials zemininin ÜSTÜNE çizilir. Görsel
+        yüklenemezse app.js onu DOM'dan çıkarır ve altındaki initials
+        avatarı görünür kalır. technician_id yoksa <img> hiç basılmaz.
+
+   MÜSAİTLİK: ayrı bir daire olarak DEĞİL, avatarın sağ alt köşesinde küçük
+   bir gösterge olarak çizilir ve avatarı KAPLAMAZ.
+     available=True  -> yeşil online noktası
+     available=False -> nötr gri nokta
+     available=None  -> gösterge YOK (müsaitlik bu bağlamda bilinmiyor)
+
+   ERİŞİLEBİLİRLİK: avatar tamamen dekoratiftir — sarmalayıcı
+   aria-hidden="true" taşır ve <img alt=""> boştur; isim zaten satırda düz
+   metin olarak vardır. Müsaitlik anlamı yalnız renge bağlı değildir:
+   kartta "Yeni iş alabilir" / "Yeni iş almıyor" metni korunur.
+   ===================================================================== #}
+
+{% macro member_avatar(name, available=None, technician_id=None) %}
+{%- set illustration = avatar_illustration(technician_id) -%}
+<span class="rail-avatar" style="background:{{ name|avatar_color }};"
+      aria-hidden="true">{{ name|avatar_initials
+  }}{% if illustration %}<img class="rail-avatar-img" alt="" loading="lazy"
+       src="{{ url_for('static', filename=illustration) }}">{% endif
+  %}{% if available is not none %}<span class="presence {{ 'presence-online' if available else 'presence-busy' }}"></span>{% endif %}</span>
+{%- endmacro %}

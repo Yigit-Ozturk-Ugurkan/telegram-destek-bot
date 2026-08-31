@@ -1,0 +1,512 @@
+{% extends "base.html" %}
+
+{% block title %}Ekip — Destek Masası{% endblock %}
+
+{% block content %}
+
+<div class="board-head">
+  <h1>Teknik Ekip</h1>
+
+  <p class="muted narrow">
+    Kullanıcı AI önerisini yetersiz bulduğunda talep, gerekli uzmanlığa göre
+    <strong>sistem tarafından otomatik</strong> yönlendirilir: önce en iyi
+    uzmanlık önceliği, sonra en az iş yükü, sonra en uzun süredir yeni ana iş
+    almayan kişi seçilir. Son kullanıcı teknik personel seçmez. Uygun kimse
+    yoksa talep, biri müsait olana kadar kuyrukta bekler.
+  </p>
+</div>
+
+{% if technicians %}
+
+<div class="team-grid">
+  {% for t in technicians %}
+
+  <div class="team-card">
+
+    <div
+      class="team-avatar"
+      style="background:{{ t.name|avatar_color }};"
+      aria-hidden="true"
+    >
+      {{ t.name|avatar_initials }}
+    </div>
+
+    <p class="team-name">{{ t.name }}</p>
+
+    {% if t.role %}
+      <p class="team-role">{{ t.role }}</p>
+    {% endif %}
+
+    <p class="team-dept">{{ t.department }}</p>
+
+    <p class="team-load">
+      {{ t.active_ticket_count }} aktif talep
+    </p>
+
+    <p class="team-availability">
+      <span
+        class="dot {{ 'dot-available' if t.available else 'dot-busy' }}"
+        aria-hidden="true"
+      ></span>
+
+      {{ 'Yeni iş alabilir' if t.available else 'Yeni iş almıyor' }}
+    </p>
+
+
+    {# ---------------------------------------------------------
+       UZMANLIK ÖNCELİKLERİ
+       --------------------------------------------------------- #}
+
+    {% set skill_by_priority = {} %}
+
+    {% for s in t.skills %}
+      {% set _ = skill_by_priority.update({s.priority: s}) %}
+    {% endfor %}
+
+
+    <div class="skill-summary">
+
+      <span class="skill-summary-title">
+        Uzmanlık
+      </span>
+
+      {% if t.skills %}
+
+        <ol class="skill-list">
+
+          {% for p in priorities %}
+            <li>
+
+              {% if skill_by_priority.get(p) %}
+
+                {{ skill_by_priority[p].skill_name }}
+
+                {% if not skill_by_priority[p].skill_active %}
+                  <span class="legacy-tag">
+                    pasif
+                  </span>
+                {% endif %}
+
+              {% else %}
+
+                <span class="muted">—</span>
+
+              {% endif %}
+
+            </li>
+          {% endfor %}
+
+        </ol>
+
+      {% else %}
+
+        <p class="muted skill-empty">
+          Henüz uzmanlık tanımlanmadı.
+        </p>
+
+      {% endif %}
+
+    </div>
+
+
+    <details class="account-box">
+
+      <summary>
+        Uzmanlık önceliklerini düzenle
+      </summary>
+
+      {% for p in priorities %}
+
+      <form
+        method="post"
+        action="{{ url_for('technician_skill_set', technician_id=t.id) }}"
+        class="skill-form"
+        data-guard
+      >
+
+        <input
+          type="hidden"
+          name="csrf_token"
+          value="{{ csrf_token() }}"
+        >
+
+        <input
+          type="hidden"
+          name="form_token"
+          value="{{ form_token() }}"
+        >
+
+        <input
+          type="hidden"
+          name="priority"
+          value="{{ p }}"
+        >
+
+        <label for="skill_{{ t.id }}_{{ p }}">
+          {{ p }}. uzmanlık
+        </label>
+
+        <select
+          id="skill_{{ t.id }}_{{ p }}"
+          name="skill_id"
+        >
+
+          <option value="">
+            — yok —
+          </option>
+
+          {% for s in active_skills %}
+
+            <option
+              value="{{ s.id }}"
+              {{ 'selected' if skill_by_priority.get(p)
+                 and skill_by_priority[p].skill_id == s.id
+                 else '' }}
+            >
+              {{ s.name }}
+            </option>
+
+          {% endfor %}
+
+        </select>
+
+        <button
+          type="submit"
+          class="btn btn-secondary btn-sm"
+          data-pending-label="Kaydediliyor…"
+        >
+          Kaydet
+        </button>
+
+      </form>
+
+      {% endfor %}
+
+      <p class="field-hint">
+        Aynı kişide bir uzmanlık yalnızca bir öncelikte bulunabilir;
+        bir önceliğe yeni uzmanlık seçmek eskisinin yerini alır.
+      </p>
+
+    </details>
+
+
+    {# ---------------------------------------------------------
+       WEB HESABI VAR
+       --------------------------------------------------------- #}
+
+    {% if web_users.get(t.id) %}
+
+      <p class="team-login">
+
+        Kullanıcı adı:
+        <code>{{ web_users[t.id].username }}</code>
+
+        {% if web_users[t.id].must_change_password %}
+
+          <span class="pending-tag">
+            şifre bekliyor
+          </span>
+
+        {% endif %}
+
+      </p>
+
+
+      <details class="account-box">
+
+        <summary>
+          Geçici şifre ver
+        </summary>
+
+        <form
+          method="post"
+          action="{{ url_for('team_reset_password', technician_id=t.id) }}"
+          data-guard
+        >
+
+          {# GERÇEK CSRF KORUMASI #}
+          <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+          >
+
+          {# IDEMPOTENCY TOKEN #}
+          <input
+            type="hidden"
+            name="form_token"
+            value="{{ form_token() }}"
+          >
+
+          <label for="reset_pw_{{ t.id }}">
+            Yeni geçici şifre
+          </label>
+
+          <input
+            type="password"
+            id="reset_pw_{{ t.id }}"
+            name="temp_password"
+            minlength="{{ password_min }}"
+            autocomplete="new-password"
+            required
+          >
+
+          <p class="field-hint">
+            En az {{ password_min }} karakter.
+            Kullanıcı ilk girişte değiştirmek zorunda kalır.
+          </p>
+
+          <button
+            type="submit"
+            class="btn btn-secondary"
+            data-pending-label="Atanıyor…"
+          >
+            Şifreyi Sıfırla
+          </button>
+
+        </form>
+
+      </details>
+
+
+    {# ---------------------------------------------------------
+       WEB HESABI YOK
+       --------------------------------------------------------- #}
+
+    {% else %}
+
+      <p class="team-login muted">
+        Web hesabı yok
+      </p>
+
+
+      <details class="account-box">
+
+        <summary>
+          Web hesabı oluştur
+        </summary>
+
+        <form
+          method="post"
+          action="{{ url_for('team_create_account', technician_id=t.id) }}"
+          data-guard
+        >
+
+          {# GERÇEK CSRF KORUMASI #}
+          <input
+            type="hidden"
+            name="csrf_token"
+            value="{{ csrf_token() }}"
+          >
+
+          {# IDEMPOTENCY TOKEN #}
+          <input
+            type="hidden"
+            name="form_token"
+            value="{{ form_token() }}"
+          >
+
+          <label for="uname_{{ t.id }}">
+            Kullanıcı adı
+          </label>
+
+          <input
+            type="text"
+            id="uname_{{ t.id }}"
+            name="username"
+            value="{{ suggest_username(t.name) }}"
+            autocomplete="off"
+            required
+          >
+
+          <label for="pw_{{ t.id }}">
+            Geçici şifre
+          </label>
+
+          <input
+            type="password"
+            id="pw_{{ t.id }}"
+            name="temp_password"
+            minlength="{{ password_min }}"
+            autocomplete="new-password"
+            required
+          >
+
+          <p class="field-hint">
+            En az {{ password_min }} karakter.
+            Kullanıcıya güvenli bir kanaldan iletin;
+            panelde bir daha gösterilmez.
+          </p>
+
+          <button
+            type="submit"
+            class="btn btn-secondary"
+            data-pending-label="Oluşturuluyor…"
+          >
+            Hesabı Oluştur
+          </button>
+
+        </form>
+
+      </details>
+
+    {% endif %}
+
+
+    {# ---------------------------------------------------------
+       MÜSAİTLİK
+       --------------------------------------------------------- #}
+
+    <form
+      method="post"
+      action="{{ url_for('team_toggle', technician_id=t.id) }}"
+      data-guard
+    >
+
+      <input
+        type="hidden"
+        name="csrf_token"
+        value="{{ csrf_token() }}"
+      >
+
+      <input
+        type="hidden"
+        name="form_token"
+        value="{{ form_token() }}"
+      >
+
+      <button
+        type="submit"
+        class="btn btn-secondary"
+        data-pending-label="Güncelleniyor…"
+      >
+        {{ 'Meşgul Yap' if t.available else 'Müsait Yap' }}
+      </button>
+
+    </form>
+
+  </div>
+
+  {% endfor %}
+</div>
+
+
+{% else %}
+
+<div class="empty-state">
+  <p>Henüz teknik ekip üyesi eklenmedi.</p>
+</div>
+
+{% endif %}
+
+
+{# ---------------------------------------------------------
+   YENİ TEKNİSYEN
+   --------------------------------------------------------- #}
+
+<div class="action-card form-card">
+
+  <h2 class="col-title">
+    Yeni Teknisyen Ekle
+  </h2>
+
+  <form
+    method="post"
+    action="{{ url_for('team_add') }}"
+    data-guard
+  >
+
+    <input
+      type="hidden"
+      name="csrf_token"
+      value="{{ csrf_token() }}"
+    >
+
+    <input
+      type="hidden"
+      name="form_token"
+      value="{{ form_token() }}"
+    >
+
+    <label for="name">
+      Adı
+    </label>
+
+    <input
+      type="text"
+      id="name"
+      name="name"
+      placeholder="Örn. Ahmet Yılmaz"
+      required
+    >
+
+
+    <label for="role">
+      Unvan (opsiyonel)
+    </label>
+
+    <input
+      type="text"
+      id="role"
+      name="role"
+      placeholder="Örn. Yazılım Mühendisi"
+    >
+
+
+    <label for="department">
+      Departman
+    </label>
+
+    <select
+      id="department"
+      name="department"
+    >
+
+      {% for d in departments %}
+        <option value="{{ d }}">
+          {{ d }}
+        </option>
+      {% endfor %}
+
+    </select>
+
+
+    <label for="telegram_id">
+      Telegram ID (opsiyonel)
+    </label>
+
+    <input
+      type="text"
+      id="telegram_id"
+      name="telegram_id"
+      inputmode="numeric"
+      placeholder="Örn. 123456789"
+      aria-describedby="telegram_id_hint"
+    >
+
+    <p
+      class="field-hint"
+      id="telegram_id_hint"
+    >
+      Boş bırakılırsa bildirim gönderilmez,
+      sadece web panelden takip edilir.
+    </p>
+
+    <p class="field-hint">
+      Kaydedildiğinde bu kişiye otomatik bir web kullanıcısı açılır.
+    </p>
+
+
+    <button
+      type="submit"
+      class="btn btn-primary btn-block"
+      data-pending-label="Ekleniyor…"
+    >
+      Ekibe Ekle
+    </button>
+
+  </form>
+
+</div>
+
+{% endblock %}

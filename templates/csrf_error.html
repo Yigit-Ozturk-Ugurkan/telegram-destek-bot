@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Güvenlik doğrulaması başarısız — Destek Masası{% endblock %}
+{% block content %}
+<div class="empty-state">
+  <h1>Güvenlik doğrulaması başarısız</h1>
+  <p class="muted narrow">
+    İsteğin güvenlik anahtarı (CSRF token) bu oturumla eşleşmedi. Bu genellikle
+    sayfa çok uzun süre açık kaldığında ya da oturum yenilendiğinde olur.
+    Sayfayı yenileyip işlemi tekrar deneyin.
+  </p>
+  <p><a class="btn btn-secondary" href="{{ url_for('index') }}">Panele dön</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,1695 @@
+/* ==================================================================
+   DESTEK MASASI — FRONTEND DESIGN REVISION
+
+   Flask + Jinja2 + DÜZ CSS. Framework YOKTUR (React/Vue/Tailwind eklenmedi).
+   Bu dosya tek stil kaynağıdır; template içinde inline tema kuralı yazılmaz.
+
+   TASARIM DİLİ
+   ------------
+     soft liquid / glass · premium · sade · okunabilir · rounded
+     Aşırı glow/blur YOK. Gradient YALNIZCA dış sayfa arka planındadır;
+     içerik kartları düz beyazdır.
+
+   RENK SÖZLEŞMESİ
+   ---------------
+     Renk TEK BAŞINA anlam taşımaz (WCAG 1.4.1): her rozet/uyarı metinle de
+     ifade edilir. Öncelik, SLA ve gönderim durumları hem renk hem yazıdır.
+   ================================================================== */
+
+:root {
+  /* ---- Yüzeyler ---- */
+  --surface: #FFFFFF;
+  --surface-soft: #F9FAFB;
+  --surface-sunken: #F5F6FA;
+  --glass: rgba(255, 255, 255, 0.6);
+
+  /* ---- Metin ---- */
+  --text: #1F2937;          /* ana metin */
+  --text-secondary: #6B7280;
+  --muted-ink: #9CA3AF;
+  --nav-idle: #5B6472;
+
+  /* ---- Aksan ---- */
+  --accent: #3D8B5F;
+  --accent-light: #B7E4C0;
+  --accent-ink: #1F3D2A;    /* açık yeşil buton üzerindeki metin */
+  --accent-soft: #F1FBF4;
+
+  /* ---- Çizgi / gölge ---- */
+  --line: #E5E7EB;
+  --line-soft: #EEF0F3;
+  --shadow-card: 0 2px 8px rgba(60, 80, 70, 0.06);
+  --shadow-raised: 0 6px 20px rgba(60, 80, 70, 0.10);
+  --shadow-pill: 0 1px 3px rgba(60, 80, 70, 0.10);
+
+  /* ---- Durum renkleri (her zaman metinle birlikte kullanılır) ---- */
+  --amber: #8A5606;
+  --amber-bg: #FDF1DC;
+  --blue: #2F5FC4;
+  --blue-bg: #E7EEFB;
+  --green: #1F6B41;
+  --green-bg: #E2F3E8;
+  --red: #9A2F24;
+  --red-bg: #FBE7E4;
+  --slate: #4A5568;
+  --slate-bg: #EDEFF3;
+  --purple: #5B4FC4;
+  --purple-bg: #EDEAFB;
+
+  /* Geriye dönük adlar — mevcut şablonlar bunları kullanıyor. */
+  --ink: #1F2937;
+  --ink-soft: #374151;
+  --paper: #F9FAFB;
+  --paper-raised: #FFFFFF;
+  --amber-fg: var(--amber);
+  --green-fg: var(--green);
+  --muted: var(--text-secondary);
+
+  /* ---- Ölçü ---- */
+  --radius-card: 18px;
+  --radius-inner: 14px;
+  --radius-sm: 10px;
+  --radius: 14px;
+  --pill: 999px;
+
+  /* TALEPLER EKRANI kolon genişlikleri:
+       sol ticket listesi | esneyen conversation | sağ context paneli
+     Orta kolon EN GENİŞ alandır; iki yan kolon sabit ve dardır. */
+  --list-w: 250px;
+  --ctx-w: 240px;
+
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-body);
+  line-height: 1.55;
+  /* GRADIENT YALNIZCA BURADA — kartlarda ve panellerde kullanılmaz. */
+  background: linear-gradient(160deg, #DCEEDD 0%, #DDE9F5 50%, #E7E2F5 100%);
+  background-attachment: fixed;
+  min-height: 100dvh;
+  /* Yatay SAYFA kaydırması oluşturulmaz; taşan içerik kendi kabında kayar. */
+  overflow-x: hidden;
+}
+
+a { color: inherit; text-decoration: none; }
+
+h1, h2, h3 { line-height: 1.3; }
+
+.muted { color: var(--text-secondary); font-size: 0.9rem; }
+.narrow { max-width: 66ch; }
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--accent);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 0 0 var(--radius-sm) 0;
+  z-index: 200;
+}
+.skip-link:focus { left: 0; }
+
+
+/* ==================================================================
+   NAVBAR — büyük pill, tüm authenticated sayfalarda üstte
+
+   Sidebar KALDIRILDI; ana navigasyon buradadır. Sağda YALNIZCA kullanıcı
+   avatarı bulunur: arama ve bildirim ikonu YOKTUR (işlevi olmayan kontrol
+   eklenmez).
+   ================================================================== */
+
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  padding: 14px 24px 10px;
+}
+
+.navbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 10px 20px;
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(150%) blur(10px);
+  backdrop-filter: saturate(150%) blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: var(--pill);
+  box-shadow: var(--shadow-card);
+}
+
+.nav-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.98rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.nav-brand-mark,
+.brand-mark {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 1.15rem;
+}
+
+/* Sekmeler TEK bir soft track içinde durur — üç ayrı buton gibi GÖRÜNMEZ. */
+.nav-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 auto;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: var(--pill);
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 100%;
+}
+.nav-tabs::-webkit-scrollbar { display: none; }
+
+.nav-tab {
+  padding: 7px 16px;
+  border-radius: var(--pill);
+  font-size: 0.88rem;
+  color: var(--nav-idle);
+  white-space: nowrap;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.is-active {
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-pill);
+}
+.nav-tab-count {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+/* ---- Avatar menüsü (minimal vanilla JS ile açılır) ---- */
+.nav-user { margin-left: auto; position: relative; flex-shrink: 0; }
+
+.avatar-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px;
+  background: transparent;
+  border: 0;
+  border-radius: var(--pill);
+  cursor: pointer;
+  font-family: inherit;
+}
+.avatar-btn:hover { background: rgba(255, 255, 255, 0.6); }
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+}
+.mini-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.mini-name { font-size: 0.78rem; color: var(--text); }
+
+.avatar-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  min-width: 220px;
+  padding: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-inner);
+  box-shadow: var(--shadow-raised);
+  display: grid;
+  gap: 2px;
+  z-index: 70;
+}
+.avatar-menu[hidden] { display: none; }
+
+.avatar-menu-head {
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--line-soft);
+  margin-bottom: 4px;
+}
+.avatar-menu-name { font-size: 0.88rem; font-weight: 600; margin: 0; }
+.avatar-menu-role { font-size: 0.76rem; color: var(--text-secondary); margin: 0; }
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  background: transparent;
+  border-radius: var(--radius-sm);
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover { background: var(--surface-sunken); }
+.avatar-menu form { margin: 0; }
+
+.menu-hint { margin-left: auto; font-size: 0.72rem; color: var(--muted-ink); }
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.dot-available { background: #3ECF8E; }
+.dot-busy { background: var(--muted-ink); }
+
+
+/* ==================================================================
+   SAYFA GÖVDESİ
+   ================================================================== */
+
+.page {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 8px 24px 56px;
+}
+
+/* TALEPLER EKRANI — 250px | minmax(0,1fr) | 240px
+   Orta kolon en önemli ve en geniş alandır. minmax(0,1fr) sayesinde uzun bir
+   mesaj/tablo kolonu şişiremez ve sayfa yatay kaymaz. */
+.workspace {
+  display: grid;
+  grid-template-columns: var(--list-w) minmax(0, 1fr) var(--ctx-w);
+  gap: 16px;
+  max-width: 1560px;
+  margin: 0 auto;
+  padding: 8px 24px 32px;
+  align-items: start;
+}
+/* Kolonlar flex-column: sabit başlıklar akışta kalır, TEK bir çocuk
+   (liste / mesaj geçmişi / ekip listesi) esneyip kendi içinde kayar.
+   min-width/min-height: 0 kritiktir — flex çocuğu varsayılan olarak
+   içeriğinden küçülemez ve taşmaya yol açardı. */
+.ws-list {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.ws-main { min-width: 0; }
+.ws-context {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.flash-region { padding: 0 24px; }
+.flash-stack {
+  display: grid;
+  gap: 8px;
+  max-width: 1560px;
+  margin: 0 auto 14px;
+}
+.flash-stack:empty { display: none; }
+.flash {
+  padding: 11px 16px;
+  border-radius: var(--radius-inner);
+  font-size: 0.88rem;
+  box-shadow: var(--shadow-card);
+}
+.flash-success { background: var(--green-bg); color: var(--green); }
+.flash-error { background: var(--red-bg); color: var(--red); }
+
+
+/* ==================================================================
+   KARTLAR VE FORM ÖĞELERİ
+   ================================================================== */
+
+.card,
+.action-card,
+.ops-card,
+.team-card,
+.form-card {
+  background: var(--surface);          /* içerik kartlarında gradient YOK */
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+}
+
+.action-card { padding: 18px; }
+.action-col { display: grid; gap: 14px; align-content: start; }
+
+.col-title {
+  font-size: 0.94rem;
+  font-weight: 600;
+  margin: 0 0 12px;
+  color: var(--text);
+}
+.sub-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 16px 0 8px;
+}
+
+.board-head { margin-bottom: 20px; }
+.board-head h1 { margin: 0 0 8px; font-size: 1.5rem; font-weight: 650; }
+
+form label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 12px 0 5px;
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+select,
+textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.94rem;
+  min-height: 42px;
+}
+textarea { resize: vertical; line-height: 1.5; }
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  background: #fff;
+}
+
+.field-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin: 6px 0 0;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: var(--pill);
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 40px;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+.btn-primary { background: var(--accent-light); color: var(--accent-ink); }
+.btn-primary:hover { filter: brightness(0.96); }
+.btn-secondary {
+  background: var(--surface-soft);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.btn-secondary:hover { background: var(--surface-sunken); }
+.btn-block { width: 100%; }
+.btn-sm { padding: 6px 12px; font-size: 0.78rem; min-height: 32px; margin-top: 0; }
+
+.btn[disabled],
+.btn[aria-busy="true"] { opacity: 0.6; cursor: progress; }
+
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.account-box {
+  border-top: 1px solid var(--line-soft);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+.account-box summary {
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  list-style: none;
+}
+.account-box summary::-webkit-details-marker { display: none; }
+.account-box summary::before { content: "\25B8  "; color: var(--accent); }
+.account-box[open] summary::before { content: "\25BE  "; }
+.account-box summary:hover { color: var(--text); }
+.account-box .btn { width: 100%; }
+.account-box label { font-size: 0.76rem; }
+
+
+/* ==================================================================
+   SEGMENTED CONTROL — [ Tümü ] [ Aktif ] [ Çözülmüş ]
+
+   iOS tarzı: TEK translucent capsule, aktif seçenek beyaz inner pill.
+   Üç ayrı buton gibi GÖRÜNMEZ.
+   ================================================================== */
+
+.segmented {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: var(--pill);
+  box-shadow: inset 0 1px 2px rgba(60, 80, 70, 0.04);
+}
+.segmented-option {
+  flex: 1 1 0;
+  text-align: center;
+  padding: 7px 6px;
+  border-radius: var(--pill);
+  font-size: 0.82rem;
+  color: var(--nav-idle);
+  white-space: nowrap;
+  transition: background 0.15s ease;
+}
+.segmented-option:hover { color: var(--text); }
+.segmented-option.is-active {
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-pill);
+}
+.segmented-count {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted-ink);
+  margin-left: 4px;
+}
+
+
+/* ==================================================================
+   SOL PANEL — TICKET KARTLARI
+   ================================================================== */
+
+/* SOL TICKET PANELİ — tek rounded, hafif translucent kap.
+   YALNIZCA bir sarmalayıcıdır: parent grid (.workspace) ve kolon
+   genişlikleri (--list-w) DEĞİŞMEZ, ticket kartlarının ölçüleri de aynı
+   kalır. Başlık ve segmented control panelde sabit durur; kaymak yalnızca
+   .ticket-cards'a aittir. */
+.list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  /* Shell içinde kolonu doldurur; dışında içerik kadar uzar. */
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 10px 10px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 20px;
+}
+
+.list-head { padding: 0 4px; }
+.list-title { margin: 0 0 2px; font-size: 1.05rem; font-weight: 650; }
+.list-sub { margin: 0; font-size: 0.78rem; color: var(--text-secondary); }
+
+/* KART YIĞINI — kartlar YUKARIDAN AŞAĞI doğal dizilir.
+
+   ROOT CAUSE: burası `display: grid` idi ve app-shell listeye KESİN bir
+   yükseklik verdiği anda grid'in varsayılan `align-content: stretch`'i
+   implicit satırları kolon boyunca esnetiyordu; kartlar arasındaki 10px'lik
+   gap, kalan boşluğun dağıtılmasıyla dev bir aralığa dönüşüyordu.
+
+   Çözüm: flex-column + justify-content: flex-start. Artık boşluk aralara
+   DAĞITILMAZ, altta kullanılmayan alan olarak kalır. */
+.ticket-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  gap: 10px;
+  /* Başlık + segmented control akışta kalır; YALNIZCA bu liste kayar.
+     Yükseklik app-shell'den gelir (bkz. desktop bloğu). */
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+/* Kartlar ne büyür ne küçülür; kendi doğal yüksekliklerini korur. */
+.ticket-cards > li { flex: 0 0 auto; }
+
+/* GÖRSEL HİYERARŞİ:  SELECTED (en beyaz) > HOVER > NORMAL (en transparan)
+
+   Ayrım YALNIZCA background alpha ile yapılır. Karta `opacity` VERİLMEZ —
+   verilseydi başlık, avatar, rozet ve süre metni de soluklaşırdı. */
+.tcard {
+  display: block;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid transparent;
+  border-radius: var(--radius-inner);
+  box-shadow: var(--shadow-card);
+  padding: 12px 13px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease,
+              border-color 0.15s ease;
+}
+/* Çözülmüş talep biraz daha soluk — yine yalnızca zemin, metin değil. */
+.tcard.is-resolved { background: rgba(255, 255, 255, 0.42); }
+.tcard.is-resolved .tcard-title { color: var(--text-secondary); }
+
+.tcard:hover { background: rgba(255, 255, 255, 0.78); box-shadow: var(--shadow-raised); }
+
+/* Orta alanda AÇIK olan talep: en opak kart. Kaynak, sunucudan gelen
+   selected_id'dir (bkz. partials/ticket_card.html) — yeni bir JS state
+   sistemi kurulmadı. Hover selected'ı bastıramasın diye o da tanımlı. */
+.tcard.is-selected,
+.tcard.is-selected:hover {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: var(--accent);
+  box-shadow: 0 2px 8px rgba(60, 80, 70, 0.08);
+}
+
+.tcard-top { display: flex; align-items: flex-start; gap: 9px; }
+.tcard-body { min-width: 0; flex: 1; }
+/* Kart içindeki <span>'ler satır satır dizilsin (macro inline eleman üretir). */
+.tcard-title,
+.tcard-category { display: block; }
+.tcard-title {
+  margin: 0;
+  font-size: 0.86rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.tcard-time {
+  font-size: 0.72rem;
+  color: var(--muted-ink);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-left: 6px;
+}
+.tcard-category {
+  margin: 2px 0 0;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+.tcard-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.unread-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+  background: var(--accent-light);
+  color: var(--accent-ink);
+}
+
+.empty-state {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 32px 24px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.empty-state h1 { font-size: 1.2rem; color: var(--text); }
+.list-empty {
+  padding: 18px 14px;
+  font-size: 0.82rem;
+  text-align: center;
+  color: var(--text-secondary);
+  background: var(--surface);
+  border-radius: var(--radius-inner);
+  box-shadow: var(--shadow-card);
+}
+
+
+/* ==================================================================
+   ORTA KOLON — CONVERSATION (ana çalışma alanı)
+   ================================================================== */
+
+.convo {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  display: flex;
+  flex-direction: column;
+  /* Mesaj geçmişi uzasa bile header ve composer görünürde kalır: kart kendi
+     yüksekliğini korur, YALNIZCA .convo-thread kayar. Yükseklik app-shell'den
+     gelir (bkz. desktop bloğu); dar ekranda içerik kadar uzar. */
+  height: 100%;
+  min-height: 460px;
+  overflow: hidden;
+}
+
+.convo-header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-shrink: 0;
+}
+.convo-who { min-width: 0; }
+.convo-name { margin: 0; font-size: 0.94rem; font-weight: 600; }
+.convo-sub {
+  margin: 1px 0 0;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+.convo-actions { margin-left: auto; display: flex; gap: 6px; flex-shrink: 0; }
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--text-secondary);
+  padding: 0;
+}
+.icon-btn:hover { background: var(--surface-sunken); color: var(--text); }
+.icon-btn svg { width: 17px; height: 17px; }
+
+.convo-thread {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 18px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  scrollbar-width: thin;
+}
+
+/* ---- Mesaj: avatar + gönderen adı + saat + balon ----
+   Kimin yazdığı RENKLE DEĞİL, gönderen adıyla anlaşılır. */
+.msg { display: flex; gap: 10px; align-items: flex-start; }
+.msg-body-col { min-width: 0; flex: 1; }
+.msg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.msg-sender { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+.msg-kullanici .msg-sender { color: var(--accent); }
+.msg-role {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  padding: 1px 7px;
+  border-radius: var(--pill);
+}
+.msg-time { font-size: 0.72rem; color: var(--muted-ink); font-family: var(--font-mono); }
+
+.bubble {
+  background: var(--surface-sunken);
+  border-radius: var(--radius-inner);
+  padding: 11px 14px;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.msg-kullanici .bubble { background: var(--accent-soft); }
+.msg-sistem .bubble {
+  background: transparent;
+  border: 1px dashed var(--line);
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+}
+.msg-internal .bubble {
+  background: #FFF9E9;
+  border: 1px solid #F0E2BE;
+}
+.msg-body { margin: 0; }
+
+.delivery-badge {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+  font-weight: 600;
+}
+.delivery-failed { background: var(--red-bg); color: var(--red); }
+.delivery-pending { background: var(--slate-bg); color: var(--slate); }
+
+.note-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+.kind-tag {
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+}
+.kind-solution { background: var(--purple-bg); color: var(--purple); }
+.kind-clarification { background: var(--slate-bg); color: var(--slate); }
+
+/* ---- Composer — AÇIK tema, koyu/siyah DEĞİL ---- */
+.composer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line-soft);
+  padding: 12px 18px 14px;
+  background: var(--surface);
+}
+.composer-row { display: flex; align-items: flex-end; gap: 10px; }
+.composer-input {
+  flex: 1 1 auto;
+  min-height: 44px;
+  max-height: 130px;
+  padding: 11px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--pill);
+  background: var(--surface-soft);   /* KOYU/SİYAH DEĞİL */
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.92rem;
+  resize: none;
+}
+.composer-input::placeholder { color: var(--muted-ink); }
+.composer-send {
+  flex-shrink: 0;
+  margin-top: 0;
+  padding: 11px 24px;
+  background: var(--accent-light);
+  color: var(--accent-ink);
+  border-radius: var(--pill);
+  border: 0;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  min-height: 44px;
+}
+.composer-send:hover { filter: brightness(0.96); }
+.composer-note {
+  margin: 8px 2px 0;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+}
+.composer-identity {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 9px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+}
+
+/* ---- Çözülmüş talep: mesaj kutusu YOK, yeniden aç akışı VAR ---- */
+.resolved-note {
+  flex-shrink: 0;
+  border-top: 1px solid var(--line-soft);
+  padding: 16px 18px;
+  background: var(--accent-soft);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.resolved-note p { margin: 0; font-size: 0.88rem; color: var(--green); font-weight: 600; }
+.resolved-note form { margin-left: auto; }
+.resolved-note .btn { margin-top: 0; }
+
+/* Boş state: yalnızca YÜZEY iyileştirildi. Genişlik, yükseklik, padding,
+   konum ve ortalanmış içerik AYNEN korunur. */
+.convo-empty {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  border-radius: var(--radius-card);
+  box-shadow: 0 2px 8px rgba(60, 80, 70, 0.06);
+  padding: 44px 28px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+.convo-empty h2 { margin: 0 0 6px; font-size: 1.05rem; color: var(--text); }
+.convo-empty p { margin: 0; font-size: 0.88rem; }
+
+
+/* ==================================================================
+   SAĞ PANEL — Öncelik/SLA + Aktif ekip (SALT OKUNUR)
+   ================================================================== */
+
+.ctx-card {
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  padding: 15px 15px 16px;
+}
+.ctx-title {
+  margin: 0 0 10px;
+  font-size: 0.84rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.ctx-divider { border: 0; border-top: 1px solid var(--line-soft); margin: 14px 0; }
+.ctx-line { margin: 0 0 2px; font-size: 0.78rem; color: var(--text-secondary); }
+.ctx-value { font-size: 0.82rem; color: var(--text); font-weight: 600; }
+.ctx-value.is-late { color: var(--red); }
+.ctx-hint { margin: 8px 0 0; font-size: 0.72rem; color: var(--muted-ink); }
+
+
+/* ==================================================================
+   TICKET SETTINGS DRAWER — sağdan slide-over
+
+   Formların TAMAMI mevcut Flask rotalarına POST eder; csrf_token ve
+   form_token zorunludur. Drawer yalnızca SUNUMDUR — iş mantığı Python
+   tarafındadır.
+   ================================================================== */
+
+.drawer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.48);
+  z-index: 90;
+}
+.drawer-overlay[hidden], .drawer[hidden] { display: none; }
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 380px;
+  max-width: 100vw;                /* mobilde ekran genişliğine uyar */
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: -8px 0 28px rgba(60, 80, 70, 0.14);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+.drawer-head {
+  display: flex;
+  align-items: center;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  flex-shrink: 0;
+}
+.drawer-head h2 { margin: 0; font-size: 1rem; font-weight: 650; }
+.drawer-close {
+  margin-left: auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  background: var(--surface-sunken);
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+.drawer-close:hover { color: var(--text); }
+
+.drawer-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 16px 18px 32px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.drawer-section {
+  border: 1px solid var(--line-soft);
+  border-radius: var(--radius-inner);
+  padding: 14px;
+  background: var(--surface);
+}
+.drawer-section h3 {
+  margin: 0 0 8px;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+.drawer-accordion { padding: 0; }
+.drawer-accordion > summary {
+  padding: 13px 14px;
+  cursor: pointer;
+  font-size: 0.86rem;
+  font-weight: 650;
+  list-style: none;
+}
+.drawer-accordion > summary::-webkit-details-marker { display: none; }
+.drawer-accordion > summary::after { content: "\25BE"; float: right; color: var(--muted-ink); }
+.drawer-accordion[open] > summary::after { content: "\25B4"; }
+.drawer-accordion-body { padding: 0 14px 14px; }
+
+
+/* ==================================================================
+   ROZETLER: durum, öncelik, SLA, yönlendirme dayanağı
+   ================================================================== */
+
+.status-pill {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: var(--pill);
+  background: var(--slate-bg);
+  color: var(--slate);
+  white-space: nowrap;
+}
+.status-pill.status-acik { background: var(--amber-bg); color: var(--amber); }
+.status-pill.status-atandi { background: var(--slate-bg); color: var(--slate); }
+.status-pill.status-islemde { background: var(--blue-bg); color: var(--blue); }
+.status-pill.status-beklemede { background: var(--purple-bg); color: var(--purple); }
+.status-pill.status-kapatildi { background: var(--green-bg); color: var(--green); }
+.status-pill.status-yeniden_acildi { background: var(--amber-bg); color: var(--amber); }
+.status-pill.status-eskalasyon_bekliyor { background: var(--amber-bg); color: var(--amber); }
+.status-pill-lg { font-size: 0.82rem; padding: 5px 14px; }
+
+.priority-badge {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: var(--pill);
+  white-space: nowrap;
+}
+.priority-P1 { background: var(--red-bg); color: var(--red); }
+.priority-P2 { background: var(--amber-bg); color: var(--amber); }
+.priority-P3 { background: var(--slate-bg); color: var(--slate); }
+.priority-P4 { background: var(--green-bg); color: var(--green); }
+.priority-row { margin: 0 0 12px; }
+
+.sla-item {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 0.76rem;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--slate-bg);
+  color: var(--slate);
+}
+.sla-label { font-weight: 600; }
+.sla-normal { background: var(--slate-bg); color: var(--slate); }
+.sla-warning { background: var(--amber-bg); color: var(--amber); }
+.sla-overdue { background: var(--red-bg); color: var(--red); font-weight: 600; }
+.sla-block { display: grid; gap: 6px; margin-bottom: 10px; }
+.sla-block .sla-item { justify-content: space-between; }
+.sla-paused {
+  font-size: 0.78rem;
+  background: var(--purple-bg);
+  color: var(--purple);
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  margin: 0 0 10px;
+}
+
+.queue-basis {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 2px 9px;
+  border-radius: var(--pill);
+  white-space: nowrap;
+  background: var(--slate-bg);
+  color: var(--slate);
+}
+.queue-basis-specific_skill { background: var(--blue-bg); color: var(--blue); }
+.queue-basis-department { background: var(--slate-bg); color: var(--slate); }
+.queue-basis-general_support { background: var(--purple-bg); color: var(--purple); }
+/* Manuel triyaj OPERASYON BORCUDUR: gözden kaçmasın diye uyarı tonunda. */
+.queue-basis-manual_triage { background: var(--amber-bg); color: var(--amber); }
+.queue-basis-target { font-size: 0.76rem; color: var(--text); }
+
+.legacy-tag,
+.source-tag,
+.pending-tag,
+.ai-mode-tag {
+  display: inline-block;
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: var(--pill);
+  background: var(--slate-bg);
+  color: var(--slate);
+}
+.source-tag { background: var(--blue-bg); color: var(--blue); }
+.pending-tag { background: var(--amber-bg); color: var(--amber); }
+.ai-mode-tag.is-ai { background: var(--purple-bg); color: var(--purple); }
+.ai-mode-tag.is-human { background: var(--green-bg); color: var(--green); }
+
+.role-banner {
+  font-size: 0.78rem;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  background: var(--slate-bg);
+  color: var(--slate);
+  margin: 10px 0;
+}
+.role-banner.is-primary { background: var(--green-bg); color: var(--green); }
+
+.calendar-status {
+  display: inline-block;
+  font-size: 0.74rem;
+  padding: 4px 10px;
+  border-radius: var(--pill);
+  margin: 0 0 8px;
+}
+.calendar-open { background: var(--green-bg); color: var(--green); }
+.calendar-closed { background: var(--slate-bg); color: var(--slate); }
+.calendar-holiday { background: var(--amber-bg); color: var(--amber); }
+
+/* AI öncelik önerisi — İÇ OPERASYON bilgisi. Yalnızca panelde gösterilir,
+   Telegram kullanıcısına giden hiçbir metin bu alanı kullanmaz. */
+.ai-priority-note {
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  margin: 8px 0 0;
+}
+.ai-priority-note strong { color: var(--text); }
+
+
+/* ==================================================================
+   OPERASYON PANOSU (admin) — sayaçlar ve filtre çipleri
+   ================================================================== */
+
+.ops-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.ops-card {
+  padding: 14px 15px;
+  display: grid;
+  gap: 2px;
+  /* İçerik grid kolonunu zorlayıp kartı alt satıra itemesin. */
+  min-width: 0;
+}
+.ops-card:hover { box-shadow: var(--shadow-raised); }
+.ops-value { font-family: var(--font-mono); font-size: 1.4rem; font-weight: 600; }
+.ops-label { font-size: 0.74rem; color: var(--text-secondary); }
+.ops-p1 .ops-value { color: var(--red); }
+.ops-warning .ops-value { color: var(--amber); }
+.ops-overdue .ops-value { color: var(--red); }
+
+.counter-row {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.counter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 13px;
+  border-radius: var(--pill);
+  background: rgba(255, 255, 255, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  font-size: 0.79rem;
+  color: var(--nav-idle);
+}
+.counter-chip:hover { background: #fff; color: var(--text); }
+.counter-chip span { font-family: var(--font-mono); font-size: 0.74rem; color: var(--muted-ink); }
+.counter-chip.is-active {
+  background: #fff;
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: var(--shadow-pill);
+}
+.counter-chip.is-active span { color: var(--accent); }
+
+
+/* ==================================================================
+   TABLOLAR (uzman kuyruğu, uzmanlık kataloğu, tatiller)
+   ================================================================== */
+
+.table-scroll {
+  overflow-x: auto;               /* taşan tablo KENDİ kabında kayar */
+  background: var(--surface);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+}
+.table-scroll .data-table { min-width: 720px; }
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.data-table th,
+.data-table td {
+  padding: 11px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--line-soft);
+  vertical-align: top;
+}
+.data-table th {
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-soft);
+  white-space: nowrap;
+}
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr.is-inactive td { opacity: 0.65; }
+.data-table .table-action { text-align: right; white-space: nowrap; }
+.data-table form { display: inline; }
+.data-table .btn { margin-top: 0; }
+.skill-code { font-family: var(--font-mono); font-size: 0.8rem; }
+
+
+/* ==================================================================
+   EKİP SAYFASI (/ekip) ve UZMANLIK KARTLARI
+   ================================================================== */
+
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 14px;
+}
+.team-card { padding: 18px; }
+.team-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 600;
+  margin-bottom: 10px;
+}
+.team-name { font-weight: 600; font-size: 0.94rem; margin: 0 0 2px; }
+.team-role { font-size: 0.78rem; color: var(--text-secondary); margin: 0 0 3px; }
+.team-dept { font-size: 0.76rem; color: var(--text); margin: 0 0 8px; }
+.team-load { font-size: 0.76rem; color: var(--text-secondary); margin: 0 0 4px; font-family: var(--font-mono); }
+.team-login { font-size: 0.74rem; color: var(--text-secondary); margin: 0 0 8px; overflow-wrap: anywhere; }
+.team-login code { font-family: var(--font-mono); font-size: 0.74rem; }
+.team-availability {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.78rem;
+  margin-bottom: 10px;
+}
+.team-unavailable-text { font-size: 0.76rem; color: var(--text-secondary); }
+.team-card .btn { width: 100%; }
+
+.skill-summary {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.skill-summary-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.skill-list { margin: 6px 0 0; padding-left: 18px; font-size: 0.8rem; }
+.skill-list li { margin-bottom: 2px; }
+.skill-empty { font-size: 0.78rem; margin: 4px 0 0; }
+.skill-form { margin-top: 10px; display: grid; gap: 6px; }
+.skill-form label { margin: 0; font-size: 0.74rem; }
+.skill-form select { min-height: 38px; }
+.skill-form .btn { margin-top: 0; width: auto; }
+
+
+/* ==================================================================
+   AKTİF EKİP LİSTESİ (sağ panel içinde, SALT OKUNUR)
+
+   Yönetim aksiyonu İÇERMEZ: müsaitlik, uzmanlık, şifre ve hesap işlemleri
+   yalnızca /ekip sayfasındadır ve @auth.admin_required ile korunur.
+   ================================================================== */
+
+.team-rail-title { margin: 0 0 6px; font-size: 0.84rem; font-weight: 600; }
+.team-rail-hint { margin: 0 0 8px; font-size: 0.72rem; color: var(--text-secondary); }
+.team-rail-hint a { text-decoration: underline; }
+.team-rail-empty { font-size: 0.78rem; color: var(--text-secondary); margin: 0; }
+
+/* KOMPAKT SATIR: [avatar●] Ad Soyad / Ünvan. Departman, iş yükü, uzmanlık
+   dökümü ve müsaitlik metni rail'den KALDIRILDI (hepsi /ekip sayfasında).
+   Hedef satır yüksekliği 44-52px: 32px avatar + 6px dikey padding. */
+.team-rail-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.team-rail-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-soft);
+}
+/* Meşgul üye yalnızca renkle ayrılmasın diye ek bir görsel ipucu. */
+.team-rail-card.is-busy { opacity: 0.78; }
+
+.team-rail-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  line-height: 1.25;
+}
+.team-rail-name {
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-rail-role {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Ekip üyesi avatarı + online göstergesi ----
+   Satır [avatar] İsim biçimindedir. Düz büyük yeşil durum noktası
+   KULLANILMAZ; müsaitlik avatarın sağ alt köşesindeki küçük göstergedir.
+   Gösterge dekoratiftir; anlamı satırdaki `title` ve sr-only metin taşır. */
+.rail-avatar {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  /* Pastel zeminde kenar yumuşasın; sert bir disk gibi durmasın. GLOW YOK. */
+  box-shadow: 0 1px 2px rgba(60, 80, 70, 0.14);
+}
+
+/* İllüstratif avatar, renkli initials zemininin ÜSTÜNE serilir.
+   Görsel yüklenemezse app.js <img>'i DOM'dan çıkarır ve altındaki initials
+   avatarı olduğu gibi görünür kalır (bkz. partials/member_avatar.html). */
+.rail-avatar-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
+.presence {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  /* Halka kartın zeminiyle aynı renktir; gösterge avatardan "kesilmiş"
+     gibi görünür ve ayrı bir daire izlenimi vermez. */
+  border: 2px solid var(--surface-soft);
+  box-sizing: content-box;
+}
+.presence-online { background: #3ECF8E; }
+.presence-busy { background: var(--muted-ink); }
+
+/* Kart zemini beyaz olan bağlamlarda halka da beyaz olmalı. */
+.ctx-card > .team-rail-list .presence { border-color: var(--surface); }
+.team-rail-card .presence { border-color: var(--surface-soft); }
+
+
+
+/* ==================================================================
+   TALEP DETAYI — yardımcı bloklar (drawer ve orta kolon içinde)
+   ================================================================== */
+
+.detail-facts {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.detail-facts > div { min-width: 0; }
+.detail-facts dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.detail-facts dd { margin: 2px 0 0; font-size: 0.84rem; overflow-wrap: anywhere; }
+
+.assignee-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 0.88rem;
+  margin: 0 0 4px;
+}
+/* Departman satırı, avatarın sağındaki isimle hizalanır (32px + 8px gap). */
+.assignee-dept { font-size: 0.76rem; margin: 0 0 10px 40px; }
+.assignee { font-size: 0.76rem; color: var(--text-secondary); }
+
+.collab-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.collab-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+}
+.collab-body { display: flex; flex-direction: column; min-width: 0; }
+.collab-name { font-size: 0.84rem; font-weight: 600; }
+.collab-dept { font-size: 0.74rem; color: var(--text-secondary); }
+.collab-meta { font-size: 0.7rem; color: var(--muted-ink); margin-top: 2px; }
+.collab-item form { flex-shrink: 0; margin-left: auto; }
+
+.ai-box {
+  background: var(--purple-bg);
+  border-radius: var(--radius-inner);
+  padding: 13px 15px;
+  margin-bottom: 14px;
+}
+.ai-box-title { font-size: 0.76rem; font-weight: 600; color: var(--purple); margin-bottom: 5px; }
+.ai-box-body { font-size: 0.88rem; white-space: pre-wrap; }
+.ai-box-note { font-size: 0.76rem; color: var(--text-secondary); margin-top: 7px; }
+
+.summary-block { margin: 0 0 10px; }
+.summary-block dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 8px;
+}
+.summary-block dd { margin: 2px 0 0; font-size: 0.84rem; }
+.summary-list { margin: 2px 0 0; padding-left: 18px; font-size: 0.82rem; }
+.summary-list li { margin-bottom: 2px; }
+.summary-meta { font-size: 0.72rem; color: var(--muted-ink); margin: 8px 0 0; }
+.stale-note {
+  font-size: 0.76rem;
+  background: var(--amber-bg);
+  color: var(--amber);
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  margin: 0 0 8px;
+}
+
+.cycle-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.cycle-item {
+  padding: 11px 12px;
+  background: var(--surface-soft);
+  border-radius: var(--radius-sm);
+}
+.cycle-item.is-active { background: var(--accent-soft); }
+.cycle-head { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin: 0 0 6px; }
+.cycle-no { font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; }
+.cycle-state { font-size: 0.74rem; color: var(--text-secondary); }
+.cycle-item.is-active .cycle-state { color: var(--accent); font-weight: 600; }
+.cycle-facts { margin: 0; display: grid; gap: 4px; }
+.cycle-facts > div { display: flex; flex-wrap: wrap; gap: 6px; align-items: baseline; }
+.cycle-facts dt { font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; }
+.cycle-facts dd { margin: 0; font-size: 0.78rem; overflow-wrap: anywhere; }
+
+.hours-list { margin: 0 0 10px; display: grid; gap: 3px; }
+.hours-list > div {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.hours-list > div:last-child { border-bottom: none; }
+.hours-list dt { font-size: 0.82rem; }
+.hours-list dd { margin: 0; font-size: 0.82rem; font-family: var(--font-mono); }
+.hours-list > div.is-closed dt,
+.hours-list > div.is-closed dd { color: var(--text-secondary); }
+
+
+/* ==================================================================
+   LOGIN
+   ================================================================== */
+
+.login-wrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+}
+.login-card {
+  background: var(--surface);
+  border-radius: 20px;
+  box-shadow: var(--shadow-raised);
+  padding: 34px 30px;
+  width: 100%;
+  max-width: 360px;
+}
+.ticket-stub { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+.stub-hash { font-family: var(--font-mono); color: var(--accent); font-weight: 600; font-size: 1.25rem; }
+.stub-label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  color: var(--text-secondary);
+}
+.login-card h1 { font-size: 1.25rem; margin: 0 0 4px; font-weight: 650; }
+.login-card .muted { margin: 0 0 6px; }
+.login-card input { border-radius: var(--pill); padding: 11px 18px; }
+.login-card .btn { margin-top: 20px; }
+
+.form-card { padding: 22px; max-width: 420px; margin-top: 8px; }
+
+
+/* ==================================================================
+   RESPONSIVE + DESKTOP APP SHELL
+
+   Desktop  : 3 kolon, SAYFANIN KENDİSİ KAYMAZ (app shell)
+   Medium   : sağ context paneli conversation'ın ALTINA geçer
+   Mobile   : normal document flow, ardışık yığılma
+   HİÇBİR bantta yatay SAYFA kaydırması oluşmaz.
+   ================================================================== */
+
+/* ---- DESKTOP APP SHELL (>= 1181px, üç kolonun geçerli olduğu bant) ----
+
+   NAVBAR
+   -----------------------------------------------------
+   TICKET LIST  |  CONVERSATION  |  ACTIVE TEAM
+        ↕                ↕               ↕
+   local scroll     local scroll    local scroll
+
+   body viewport yüksekliğine kilitlenir ve overflow:hidden olur; tarayıcının
+   ana sayfası AŞAĞI UZAMAZ. Navbar kendi yüksekliğini alır, workspace kalan
+   alanı doldurur. 50 ticket ya da 30 teknisyen gelse bile navbar ve kolon
+   başlıkları yerinde kalır — yalnızca ilgili içerik bölgesi kayar.
+
+   Kilit YALNIZCA üç kolonun geçerli olduğu bantta uygulanır. 1180px altında
+   sağ panel zaten ana içeriğin altına indiği için sayfa NORMAL document
+   flow'a döner; dar ekranda scroll kilidi yüzünden içerik erişilemez hâle
+   gelmez. */
+@media (min-width: 1181px) {
+  html { height: 100%; }
+  body {
+    height: 100dvh;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Navbar akışta sabit yüksekliktedir; sticky'e gerek kalmaz. */
+  .appbar { position: static; flex: 0 0 auto; }
+  .flash-region { flex: 0 0 auto; }
+
+  /* Standart sayfalar (Ekip, Uzmanlıklar, SLA Takvimi, şifre) kalan alanı
+     doldurur ve KENDİ İÇİNDE kayar. */
+  .page,
+  .login-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  /* Talepler ekranı: üç kolon kalan alanı paylaşır, taşma kolonların
+     İÇİNDE çözülür. */
+  .workspace {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .ws-list,
+  .ws-main,
+  .ws-context {
+    height: 100%;
+    min-height: 0;
+  }
+
+  /* SOL: başlık + segmented control akışta kalır, liste kayar. */
+  .ticket-cards { flex: 1 1 auto; min-height: 0; }
+
+  /* ORTA: conversation kartı kolonu doldurur (header + composer sabit,
+     yalnız .convo-thread kayar). Board/kuyruk gibi düz içerikli ekranlarda
+     kolonun kendisi kayar. */
+  .ws-main { overflow-y: auto; scrollbar-width: thin; }
+  .convo { height: 100%; min-height: 0; }
+
+  /* SAĞ: SLA kartı sabit kalır, YALNIZCA ekip listesi kayar. */
+  .ws-context { overflow: hidden; }
+  .ws-context > .ctx-card { flex: 0 0 auto; }
+  .ws-context > .team-rail {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .team-rail-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  /* KPI ŞERİDİ — masaüstünde TEK SATIR, altı eşit kolon.
+
+     ROOT CAUSE: `repeat(auto-fit, minmax(140px, 1fr))` kolon sayısını
+     kullanılabilir genişlikten TÜRETİYORDU. Orta kolon (1560px'lik
+     workspace'ten sol 250 + sağ 240 + gap/padding düşünce) 1280-1440px
+     ekranlarda 6x140+5x10 = 890px'i bulamıyor, auto-fit 4-5 kolona düşüyor
+     ve kartlar 4+2 / 5+1 olarak kırılıyordu.
+
+     Çözüm: bu bantta kolon sayısını SABİTLE. minmax(0, 1fr) kritik —
+     varsayılan `auto` minimum, kart içeriğinin kolonu genişletip taşmasına
+     ve yatay kaymaya yol açardı. Uzun etiket ("SLA Yaklaşan") gerekirse iki
+     satıra iner; KART ikinci grid satırına DÜŞMEZ.
+
+     Yalnız .ops-grid kendi mevcut alanını böler: workspace genişliği,
+     --list-w ve --ctx-w DEĞİŞMEZ. */
+  .ops-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  /* Dar kolonlarda nefes payı; yükseklik, radius, renk ve tipografi aynı. */
+  .ops-card { padding: 14px 10px; }
+}
+
+@media (min-width: 1700px) {
+  :root { --list-w: 280px; --ctx-w: 260px; }
+}
+
+/* MEDIUM: sağ panel alta iner, sol liste + conversation yan yana kalır. */
+/* MEDIUM (<=1180px): app shell YOK — sayfa normal akar. Sağ panel ana
+   içeriğin altına iner ve kartları yan yana dizilir. */
+@media (max-width: 1180px) {
+  .workspace { grid-template-columns: var(--list-w) minmax(0, 1fr); }
+  .ws-context {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  }
+  .convo { height: auto; min-height: 0; }
+  .convo-thread { max-height: 58vh; }
+  /* Uzun listede sol kolon sayfayı aşırı uzatmasın. */
+  .ticket-cards { max-height: 70vh; }
+}
+
+/* MOBILE: tek kolon — liste ve conversation ardışık stack.
+   App shell burada da KAPALIDIR: body normal akar, hiçbir bölge scroll
+   kilidiyle erişilemez hâle gelmez. */
+@media (max-width: 860px) {
+  body { height: auto; overflow: visible; display: block; }
+  .appbar { position: sticky; padding: 10px 12px 8px; }
+  .navbar { gap: 10px; padding: 8px 12px; }
+  .nav-brand-label { display: none; }
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 8px 14px 28px;
+    gap: 12px;
+  }
+  .ws-context { grid-column: auto; }
+  .page { padding: 8px 14px 40px; }
+  .flash-region { padding: 0 14px; }
+  .ticket-cards { max-height: none; }
+  .convo-thread { max-height: none; }
+  .drawer { width: 100%; }
+  .composer-row { flex-wrap: wrap; }
+  .composer-send { width: 100%; }
+}
+
+@media (max-width: 520px) {
+  .board-head h1 { font-size: 1.25rem; }
+  .ops-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  .segmented-option { font-size: 0.78rem; padding: 7px 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}

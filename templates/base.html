@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Destek Masası{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="{{ url_for('static', filename='app.js') }}" defer></script>
+{# JS KAPALIYKEN de talep ayarları erişilebilir kalmalı: drawer, slide-over
+   yerine sayfanın altında normal bir blok olarak açılır. Formlar zaten düz
+   HTML POST'udur; CSRF ve yetkilendirme sunucu tarafındadır. #}
+<noscript><style>
+  .drawer { position: static; width: auto; max-width: none;
+            border-left: 0; box-shadow: none; }
+  .drawer[hidden] { display: flex; }
+  .drawer-overlay, .drawer-close { display: none; }
+  .avatar-menu[hidden] { display: grid; position: static; }
+</style></noscript>
+</head>
+<body>
+{# =====================================================================
+   FRONTEND DESIGN REVISION — LAYOUT
+
+   Sol sidebar KALDIRILDI. Authenticated sayfalarda üstte tek bir pill
+   navbar bulunur; ana içerik ya standart tek kolon `.page` ya da Talepler
+   ekranının üç kolonlu `.workspace` düzenidir.
+
+   İki içerik bloğu vardır:
+     {% block content %}   -> standart sayfalar (ekip, uzmanlık, SLA takvimi…)
+     {% block workspace %} -> 250px | 1fr | 240px talep çalışma alanı
+
+   Sunucu tarafında render edilen state korunur; SPA/route değişikliği YOK.
+   ===================================================================== #}
+{% if current_user %}
+  <a class="skip-link" href="#main">Ana içeriğe geç</a>
+  {% include "partials/navbar.html" %}
+{% endif %}
+
+{% block layout %}
+<main class="page" id="main">
+  {% include "_flash.html" %}
+  {% block content %}{% endblock %}
+</main>
+{% endblock %}
+</body>
+</html>

@@ -1,0 +1,60 @@
+{# =====================================================================
+   AKTİF EKİP — sağ context panelindeki SALT OKUNUR kart.
+
+   HİÇBİR yönetim aksiyonu içermez: müsaitlik değiştirme, uzmanlık düzenleme,
+   şifre verme, hesap açma burada YOKTUR. Bunlar yalnızca /ekip sayfasında ve
+   yalnızca admin içindir. Buton gizlemek yetki değildir: yönetim rotaları
+   @auth.admin_required ile korunur, teknisyen doğrudan POST ederse 403 alır.
+
+   FRONTEND UX REVISION — KOMPAKT SATIR:
+     Panelin cevapladığı soru "ekipte kim var ve kim müsait?" — tam personel
+     kartı DEĞİL. Bu yüzden satır yalnızca:
+
+         [avatar●] Ad Soyad
+                   Ünvan
+
+     Departman, aktif talep sayısı, uzmanlık dökümü ve "Yeni iş alabilir"
+     metni rail'den KALDIRILDI; hepsi zaten /ekip sayfasında duruyor.
+     Ünvan yoksa yalnızca isim gösterilir.
+
+   MÜSAİTLİK: avatarın sağ alt köşesindeki küçük presence göstergesi
+   (bkz. partials/member_avatar.html). Uzun metin satırı yerine, anlamın
+   yalnızca renge bağlı kalmaması için satırda `title` ve ekran okuyucuya
+   görünen sr-only metin bulunur (WCAG 1.4.1).
+
+   Veri: db.list_team_overview() — zaten context'e enjekte edilmiş
+   `team_rail`. Bu sadeleştirme için YENİ SORGU EKLENMEDİ; sabit sayıda
+   sorgu, N+1 yok.
+   ===================================================================== #}
+{% from "partials/member_avatar.html" import member_avatar %}
+
+<aside class="ctx-card team-rail" aria-labelledby="team-rail-title">
+  <h2 class="team-rail-title" id="team-rail-title">Aktif Ekip</h2>
+
+  {% if team_rail %}
+    <p class="team-rail-hint">
+      {% if current_user.is_admin %}
+        Ekip yönetimi <a href="{{ url_for('team') }}">Ekip</a> sayfasındadır.
+      {% else %}
+        Bu liste salt okunurdur.
+      {% endif %}
+    </p>
+
+    <ul class="team-rail-list">
+      {% for t in team_rail %}
+      {% set state = 'Müsait' if t.available else 'Meşgul' %}
+      <li class="team-rail-card{{ ' is-busy' if not t.available else '' }}"
+          title="{{ t.name }} — {{ state }}">
+        {{ member_avatar(t.name, t.available, t.id) }}
+        <span class="team-rail-body">
+          <span class="team-rail-name">{{ t.name }}</span>
+          {% if t.role %}<span class="team-rail-role">{{ t.role }}</span>{% endif %}
+        </span>
+        <span class="sr-only">{{ state }}</span>
+      </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="team-rail-empty">Henüz teknik ekip üyesi yok.</p>
+  {% endif %}
+</aside>

@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}SLA Takvimi — Destek Masası{% endblock %}
+{% block content %}
+
+{% set gun_adlari = {0:'Pazartesi',1:'Salı',2:'Çarşamba',3:'Perşembe',4:'Cuma',5:'Cumartesi',6:'Pazar'} %}
+
+<div class="board-head">
+  <h1>SLA Takvimi</h1>
+  <p class="muted narrow">
+    SLA sayacı yalnızca çalışma saatlerinde işler. Hafta sonu ve tatil günleri
+    süreye dahil edilmez. Bu ayarlar yalnızca yöneticiler tarafından yönetilir.
+  </p>
+  <p class="calendar-status calendar-{{ calendar_status.state }}">
+    Şu an: <strong>{{ calendar_status.label }}</strong>
+    {%- if calendar_status.next_open %} · Sonraki çalışma saati: {{ calendar_status.next_open }}{% endif %}
+    {%- if calendar_status.closes_at %} · Kapanış: {{ calendar_status.closes_at }}{% endif %}
+  </p>
+</div>
+
+<div class="detail-grid">
+  <div class="thread-col">
+    <h2 class="col-title">Tatiller</h2>
+    {% if holidays %}
+    <div class="table-scroll">
+      <table class="data-table">
+        <caption class="sr-only">Tanımlı tatil günleri</caption>
+        <thead>
+          <tr>
+            <th scope="col">Tarih</th>
+            <th scope="col">Ad</th>
+            <th scope="col">Durum</th>
+            <th scope="col"><span class="sr-only">İşlem</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for h in holidays %}
+          <tr class="{{ '' if h.active else 'is-inactive' }}">
+            <td><code class="skill-code">{{ h.holiday_date }}</code></td>
+            <td>{{ h.name }}</td>
+            <td>
+              <span class="status-pill {{ 'status-atandi' if h.active else 'status-beklemede' }}">
+                {{ 'Aktif' if h.active else 'Pasif' }}
+              </span>
+            </td>
+            <td class="table-action">
+              <form method="post" action="{{ url_for('holiday_toggle', holiday_id=h.id) }}" data-guard>
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="form_token" value="{{ form_token() }}">
+                <button type="submit" class="btn btn-secondary btn-sm"
+                        data-pending-label="…">
+                  {{ 'Pasif Yap' if h.active else 'Aktif Yap' }}
+                </button>
+              </form>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+      <div class="empty-state"><p>Henüz tatil tanımlanmadı.</p></div>
+    {% endif %}
+
+    <div class="action-card form-card">
+      <h2 class="col-title">Tatil Ekle</h2>
+      <form method="post" action="{{ url_for('holiday_add') }}" data-guard>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_token" value="{{ form_token() }}">
+        <label for="holiday_date">Tarih</label>
+        <input type="date" id="holiday_date" name="holiday_date"
+               aria-describedby="date_hint" required>
+        <p class="field-hint" id="date_hint">Aynı tarih ikinci kez eklenemez.</p>
+
+        <label for="name">Tatil adı</label>
+        <input type="text" id="name" name="name"
+               placeholder="Örn. Cumhuriyet Bayramı" required>
+
+        <button type="submit" class="btn btn-primary btn-block"
+                data-pending-label="Ekleniyor…">Tatil Ekle</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="action-col">
+    <div class="action-card">
+      <h2 class="col-title">Çalışma Saatleri</h2>
+      <dl class="hours-list">
+        {% for gun in [0,1,2,3,4,5,6] %}
+        <div class="{{ 'is-closed' if not business_hours.get(gun) else '' }}">
+          <dt>{{ gun_adlari[gun] }}</dt>
+          <dd>
+            {%- if business_hours.get(gun) -%}
+              {{ business_hours[gun][0] }} – {{ business_hours[gun][1] }}
+            {%- else -%}Kapalı{%- endif -%}
+          </dd>
+        </div>
+        {% endfor %}
+      </dl>
+      <p class="field-hint">
+        Saat dilimi: <code>{{ timezone_name }}</code><br>
+        Bu ayarlar <code>config.py</code> içindeki <code>BUSINESS_HOURS</code>
+        tablosundan gelir. Değişiklik yalnızca <strong>yeni</strong> SLA
+        döngülerine uygulanır; açık taleplerin son tarihleri korunur.
+      </p>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

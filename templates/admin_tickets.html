@@ -1,0 +1,179 @@
+{% extends "workspace_base.html" %}
+{% from "_sla_badge.html" import sla_line, priority_badge %}
+{% from "partials/ticket_list_panel.html" import ticket_list_panel %}
+
+{% block title %}Talepler — Destek Masası{% endblock %}
+
+{# =====================================================================
+   ADMIN — TALEPLER EKRANI
+
+   FRONTEND DESIGN REVISION A2: Dashboard / Aktif Talepler / Çözülmüş
+   Talepler AYRIMI KALDIRILDI. Hepsi bu tek ekranda, soldaki segmented
+   control ve operasyon filtreleriyle yönetilir.
+
+   Filtre mekanizması DEĞİŞMEDİ: ?status= / ?priority= / ?sla= / ?basis=
+   query-param'ları aynen korunur; sunucu tarafında süzülür.
+   ===================================================================== #}
+
+{% block ws_list %}
+  {# Başlık "Talepler" ile sadeleşti ve alt açıklama kaldırıldı: segmented
+     control zaten Tümü/Aktif/Çözülmüş ayrımını yapıyor. #}
+  {{ ticket_list_panel(
+       tickets, 'admin_tickets', group,
+       counts={'all': counts.all, 'active': counts.active, 'resolved': counts.resolved},
+       title='Talepler',
+       empty_message='Bu filtrede talep yok.') }}
+{% endblock %}
+
+{% block ws_main %}
+<div class="board-head">
+  {# Durum başlığı (Tümü/Aktif/Çözülmüş) KPI kartlarının üstünde İKİNCİ bir
+     ticket başlığı oluşturuyordu; tek bölüm başlığı artık sol paneldeki
+     "Talepler". Uzman bekleyen kuyruğu ayrı bir operasyon görünümü olduğu
+     için kendi başlığını korur. #}
+  {% if group == waiting_status %}<h1>Uzman Bekleyen</h1>{% endif %}
+
+  {# --- Operasyon sayaçları (tek aggregate sorgu seti) --- #}
+  <div class="ops-grid">
+    <a class="ops-card" href="{{ url_for('admin_tickets', status='active') }}">
+      <span class="ops-value">{{ counts.active }}</span>
+      <span class="ops-label">Aktif Talepler</span>
+    </a>
+    <a class="ops-card ops-p1" href="{{ url_for('admin_tickets', priority='P1') }}">
+      <span class="ops-value">{{ counts.p1 }}</span>
+      <span class="ops-label">P1 Kritik</span>
+    </a>
+    <a class="ops-card ops-warning" href="{{ url_for('admin_tickets', sla='warning') }}">
+      <span class="ops-value">{{ counts.sla_warning }}</span>
+      <span class="ops-label">SLA Yaklaşan</span>
+    </a>
+    <a class="ops-card ops-overdue" href="{{ url_for('admin_tickets', sla='overdue') }}">
+      <span class="ops-value">{{ counts.sla_overdue }}</span>
+      <span class="ops-label">SLA Geciken</span>
+    </a>
+    <a class="ops-card" href="{{ url_for('admin_tickets', status=waiting_status) }}">
+      <span class="ops-value">{{ counts.waiting_expert }}</span>
+      <span class="ops-label">Uzman Bekleyen</span>
+    </a>
+    <a class="ops-card" href="{{ url_for('admin_tickets', status='resolved') }}">
+      <span class="ops-value">{{ counts.resolved }}</span>
+      <span class="ops-label">Çözülmüş</span>
+    </a>
+  </div>
+
+  <div class="counter-row" role="group" aria-label="Operasyon filtreleri">
+    <a href="{{ url_for('admin_tickets', status='waiting') }}"
+       class="counter-chip {{ 'is-active' if group == 'waiting' else '' }}">
+      Kullanıcı Bekleniyor <span>{{ counts.waiting }}</span>
+    </a>
+    <a href="{{ url_for('admin_tickets', status=waiting_status) }}"
+       class="counter-chip {{ 'is-active' if group == waiting_status else '' }}">
+      Uzman Bekleyen <span>{{ counts.waiting_expert }}</span>
+    </a>
+    {% for p in ['P1', 'P2', 'P3', 'P4'] %}
+      <a href="{{ url_for('admin_tickets', status=group if group != 'all' else None, priority=p) }}"
+         class="counter-chip {{ 'is-active' if priority_filter == p else '' }}">{{ p }}</a>
+    {% endfor %}
+    <a href="{{ url_for('admin_tickets', status=group if group != 'all' else None, sla='warning') }}"
+       class="counter-chip {{ 'is-active' if sla_filter == 'warning' else '' }}">SLA Yaklaşan</a>
+    <a href="{{ url_for('admin_tickets', status=group if group != 'all' else None, sla='overdue') }}"
+       class="counter-chip {{ 'is-active' if sla_filter == 'overdue' else '' }}">SLA Geciken</a>
+  </div>
+</div>
+
+{% if group == waiting_status %}
+  {# --- UZMAN BEKLEYEN KUYRUĞU — operasyonel detaylı görünüm ---
+
+     §28: kuyruk TEK bir yığın değildir. Her talep, hangi SINIFLANDIRMA
+     SONUCUYLA beklediğini gösterir; admin "neden atanmadı?" sorusunu satıra
+     bakarak yanıtlayabilir. Bekleyen bir talep aday bulunamadı diye BAŞKA bir
+     dayanağa (özellikle genel desteğe) geçmez.
+
+     PRIORITY ROUTING REVISION §C: satırlar artık İŞLENME SIRASINDA listelenir
+     (öncelik severity -> queue_entered_at -> ticket_id). Yani en üstteki satır
+     worker'ın bir sonraki turda ilk ele alacağı taleptir. #}
+  <div class="counter-row" role="group" aria-label="Yönlendirme dayanağı filtreleri">
+    <a href="{{ url_for('admin_tickets', status=waiting_status) }}"
+       class="counter-chip {{ 'is-active' if not basis_filter else '' }}">
+      Tümü <span>{{ counts.waiting_expert }}</span>
+    </a>
+    {% for b in ROUTING_BASES %}
+    <a href="{{ url_for('admin_tickets', status=waiting_status, basis=b) }}"
+       class="counter-chip {{ 'is-active' if basis_filter == b else '' }}">
+      {{ ROUTING_BASIS_LABELS[b] }} <span>{{ basis_counts.get(b, 0) }}</span>
+    </a>
+    {% endfor %}
+  </div>
+
+  {% if tickets %}
+  <div class="table-scroll">
+    <table class="data-table">
+      <caption class="sr-only">Uzman bekleyen talepler — işlenme sırasına göre</caption>
+      <thead>
+        <tr>
+          <th scope="col">Sıra</th>
+          <th scope="col">Talep</th>
+          <th scope="col">Konu</th>
+          <th scope="col">Bekleme nedeni</th>
+          <th scope="col">Öncelik</th>
+          <th scope="col">Kuyrukta</th>
+          <th scope="col">SLA</th>
+          <th scope="col">Son kontrol</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in tickets %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><a href="{{ url_for('ticket_detail', ticket_id=t.id) }}">#{{ t.id }}</a></td>
+          <td>{{ t.subject }}</td>
+          <td>
+            <span class="queue-basis queue-basis-{{ t.waiting.basis|lower }}">
+              {{ t.waiting.label }}</span>
+            {%- if t.waiting.target %}<br><span class="queue-basis-target">{{ t.waiting.target }}</span>{% endif %}
+          </td>
+          <td>{{ priority_badge(t.sla.priority, {'P1':'P1','P2':'P2','P3':'P3','P4':'P4'}) }}</td>
+          <td>{{ t.queue_entered_at or '—' }}</td>
+          <td>
+            {{ sla_line('İlk yanıt', t.sla.first_response_status,
+                        t.sla.first_response_level, t.sla.minutes_to_first_response) }}
+          </td>
+          <td>{{ t.candidate_checked_at or 'henüz kontrol edilmedi' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="field-hint">
+    Uygun uzman çıktığında sistem <strong>otomatik olarak</strong> en uygun
+    kişiyi ana sorumlu atar (uzmanlık önceliği → iş yükü → en uzun süredir iş
+    almayan). Son kullanıcıya teknik personel seçtirilmez.
+  </p>
+  <p class="field-hint">
+    <strong>Sıra</strong> sütunu kuyruğun işlenme sırasıdır: önce öncelik
+    (P1 → P4), aynı öncelikte kuyruğa giriş zamanına göre FIFO, eşitlikte
+    talep numarası. Hafta sonu biriken talepler Pazartesi bu sırayla işlenir.
+  </p>
+  <p class="field-hint">
+    <strong>Bekleme nedeni</strong> talebin hangi kuyrukta olduğunu gösterir.
+    Uygun kişi bulunamaması talebi <em>başka</em> bir kuyruğa taşımaz: bir
+    uzmanlık bekleyen talep genel desteğe düşmez.
+    <strong>{{ ROUTING_BASIS_LABELS[MANUAL_TRIAGE] }}</strong> satırlarında
+    otomatik atama hiç denenmez; talep detayından uzmanlık ya da departman
+    atayarak kuyruğa alabilirsiniz.
+  </p>
+  {% else %}
+  <div class="empty-state"><p>Uzman bekleyen talep yok.</p></div>
+  {% endif %}
+
+{% else %}
+  <div class="convo-empty">
+    <h2>Bir talep seçin</h2>
+    <p>Soldaki listeden bir talebe tıklayın; konuşma bu alanda açılır.</p>
+  </div>
+{% endif %}
+{% endblock %}
+
+{% block ws_context %}
+  {% include "partials/context_panel.html" %}
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "workspace_base.html" %}
+{% from "partials/ticket_list_panel.html" import ticket_list_panel %}
+
+{% block title %}Taleplerim — Destek Masası{% endblock %}
+
+{# =====================================================================
+   TECHNICIAN — TALEPLERİM
+
+   Yetkilendirme SQL seviyesindedir (db.list_technician_tickets); şablon
+   filtresine güvenilmez. Segmented control mevcut ?status= query-param'ını
+   kullanır.
+   ===================================================================== #}
+
+{% block ws_list %}
+  {{ ticket_list_panel(
+       tickets, 'my_tickets', group,
+       counts={'all': counts.all, 'active': counts.active, 'resolved': counts.resolved},
+       title='Benim taleplerim',
+       subtitle='Yalnızca size atanmış talepler',
+       empty_message='Bu filtrede size atanmış talep yok.',
+       extra_chips=([{'label': 'Kullanıcı Bekleniyor', 'count': counts.waiting,
+                      'url': url_for('my_tickets', status='waiting'),
+                      'active': group == 'waiting'}] if counts.waiting else [])) }}
+{% endblock %}
+
+{% block ws_main %}
+<div class="convo-empty">
+  <h2>Bir talep seçin</h2>
+  <p>Soldaki listeden bir talebe tıklayın; konuşma bu alanda açılır.</p>
+</div>
+{% endblock %}
+
+{% block ws_context %}
+  {% include "partials/context_panel.html" %}
+{% endblock %}

@@ -1,0 +1,66 @@
+{# =====================================================================
+   SOL PANEL — talep listesi + segmented control.
+
+   FRONTEND DESIGN REVISION A5:
+     Admin      -> "Tüm talepler"
+     Technician -> "Benim taleplerim"
+
+   Altında TEK bir iOS-style segmented control bulunur:
+       [ Tümü ] [ Aktif ] [ Çözülmüş ]
+   Üç bağımsız buton gibi GÖRÜNMEZ; tek translucent capsule içindedir ve
+   aktif seçenek beyaz inner pill'dir (stil: .segmented / .segmented-option).
+
+   FİLTRE MEKANİZMASI DEĞİŞMEDİ: seçenekler mevcut query-param yapısını
+   (?status=...) kullanır, yeni bir state katmanı eklenmez.
+   ===================================================================== #}
+{% from "partials/ticket_card.html" import ticket_card %}
+
+{% macro ticket_list_panel(tickets, endpoint, group, counts=None,
+                           title='Talepler', subtitle=None, selected_id=None,
+                           empty_message='Bu filtrede talep yok.',
+                           extra_args={}, extra_chips=[]) %}
+{# LEFT PANEL VISUAL FIX: başlık + segmented control + liste TEK bir rounded
+   panel içindedir. Panel yalnızca bir kaptır; ticket kartlarının ölçüleri,
+   tipografisi ve aralarındaki boşluk DEĞİŞMEZ. #}
+<section class="list-panel">
+<div class="list-head">
+  <h2 class="list-title">{{ title }}</h2>
+  {% if subtitle %}<p class="list-sub">{{ subtitle }}</p>{% endif %}
+</div>
+
+<div class="segmented" role="group" aria-label="Talep durumu filtresi">
+  {% for value, label in [('all', 'Tümü'), ('active', 'Aktif'), ('resolved', 'Çözülmüş')] %}
+    <a class="segmented-option {{ 'is-active' if group == value else '' }}"
+       href="{{ url_for(endpoint, status=value, **extra_args) }}"
+       {{ 'aria-current="true"'|safe if group == value else '' }}>
+      {{ label }}
+      {%- if counts and counts.get(value) is not none %}
+        <span class="segmented-count">{{ counts.get(value) }}</span>
+      {%- endif %}
+    </a>
+  {% endfor %}
+</div>
+
+{# extra_chips: segmented control DIŞINDAKİ mevcut filtreler (örn. "Kullanıcı
+   Bekleniyor"). Segmented üç seçenekle sınırlıdır; bu satır sayesinde mevcut
+   bir durum grubu ERİŞİLEMEZ HÂLE GELMEZ. Yalnızca gerçekten talep varsa
+   çizilir, böylece dar kolon boş yere kalabalıklaşmaz. #}
+{% if extra_chips %}
+<div class="counter-row" role="group" aria-label="Ek filtreler">
+  {% for chip in extra_chips %}
+  <a class="counter-chip {{ 'is-active' if chip.active else '' }}" href="{{ chip.url }}">
+    {{ chip.label }}{% if chip.count is not none %} <span>{{ chip.count }}</span>{% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% if tickets %}
+<ul class="ticket-cards">
+  {% for t in tickets %}{{ ticket_card(t, selected_id) }}{% endfor %}
+</ul>
+{% else %}
+<p class="list-empty">{{ empty_message }}</p>
+{% endif %}
+</section>
+{% endmacro %}

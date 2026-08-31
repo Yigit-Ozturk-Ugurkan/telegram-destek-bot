@@ -1,0 +1,37 @@
+{% extends "workspace_base.html" %}
+{% from "partials/ticket_list_panel.html" import ticket_list_panel %}
+
+{% block title %}Talep #{{ ticket.id }} — Destek Masası{% endblock %}
+
+{# =====================================================================
+   TALEP DETAYI — Talepler ekranının seçili hâli.
+
+   Aynı üç kolonlu düzen kullanılır: soldaki liste yerinde kalır, seçilen
+   talebin konuşması orta kolonda açılır. Böylece "listeye dön" gidiş-gelişi
+   ortadan kalkar ama ROTALAR DEĞİŞMEZ (/ticket/<id> hâlâ tam bir sayfadır).
+
+   Sol listedeki talepler kullanıcının yetkisine göre sunucuda süzülür
+   (webapp.ticket_detail -> sidebar_tickets); şablon filtresi kullanılmaz.
+   ===================================================================== #}
+
+{% block ws_list %}
+  {{ ticket_list_panel(
+       sidebar_tickets, sidebar_endpoint, sidebar_group,
+       counts=sidebar_group_counts,
+       title=sidebar_title,
+       subtitle=sidebar_subtitle,
+       selected_id=ticket.id,
+       empty_message='Bu filtrede talep yok.') }}
+{% endblock %}
+
+{% block ws_main %}
+  {% include "partials/conversation.html" %}
+{% endblock %}
+
+{% block ws_context %}
+  {% include "partials/context_panel.html" %}
+{% endblock %}
+
+{% block after_workspace %}
+  {% include "partials/ticket_settings_drawer.html" %}
+{% endblock %}

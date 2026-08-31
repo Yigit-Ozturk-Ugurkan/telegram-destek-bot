@@ -1,0 +1,11 @@
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}
+    <div class="flash-stack">
+      {% for category, message in messages %}
+        <div class="flash flash-{{ category }}"
+             role="{{ 'alert' if category == 'error' else 'status' }}"
+             {% if category == 'error' %}tabindex="-1" data-autofocus{% endif %}>{{ message }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+{% endwith %}

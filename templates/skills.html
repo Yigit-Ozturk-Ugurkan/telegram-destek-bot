@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Uzmanlıklar — Destek Masası{% endblock %}
+{% block content %}
+
+<div class="board-head">
+  <h1>Uzmanlıklar</h1>
+  <p class="muted narrow">
+    Uzmanlık (skill), departmanın yerine geçmez. Departman kaba organizasyon
+    bilgisidir; uzmanlık ise talebi doğru kişiye yönlendirmek için kullanılan
+    hassas yetenek bilgisidir. Uzmanlıklar silinmez, pasife alınır.
+  </p>
+</div>
+
+{% if skills %}
+<table class="data-table">
+  <caption class="sr-only">Tanımlı uzmanlıklar</caption>
+  <thead>
+    <tr>
+      <th scope="col">Kod</th>
+      <th scope="col">Görünen ad</th>
+      <th scope="col">Durum</th>
+      <th scope="col"><span class="sr-only">İşlem</span></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in skills %}
+    <tr class="{{ '' if s.active else 'is-inactive' }}">
+      <td><code class="skill-code">{{ s.code }}</code></td>
+      <td>{{ s.name }}</td>
+      <td>
+        <span class="status-pill {{ 'status-atandi' if s.active else 'status-beklemede' }}">
+          {{ 'Aktif' if s.active else 'Pasif' }}
+        </span>
+      </td>
+      <td class="table-action">
+        <form method="post" action="{{ url_for('skill_toggle', skill_id=s.id) }}" data-guard>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="form_token" value="{{ form_token() }}">
+          <button type="submit" class="btn btn-secondary btn-sm"
+                  data-pending-label="Güncelleniyor…">
+            {{ 'Pasif Yap' if s.active else 'Aktif Yap' }}
+          </button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="empty-state"><p>Henüz uzmanlık tanımlanmadı.</p></div>
+{% endif %}
+
+<div class="action-card form-card">
+  <h2 class="col-title">Yeni Uzmanlık Ekle</h2>
+  <form method="post" action="{{ url_for('skill_add') }}" data-guard>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="form_token" value="{{ form_token() }}">
+
+    <label for="code">Kod</label>
+    <input type="text" id="code" name="code" placeholder="Örn. COMPUTER_VISION"
+           aria-describedby="code_hint" required>
+    <p class="field-hint" id="code_hint">
+      Makine tarafından okunacak sabit anahtar. Otomatik olarak BÜYÜK_HARF_FORMATINA
+      çevrilir. Aynı kod ikinci kez oluşturulamaz.
+    </p>
+
+    <label for="name">Görünen ad</label>
+    <input type="text" id="name" name="name" placeholder="Örn. Görüntü İşleme" required>
+
+    <button type="submit" class="btn btn-primary btn-block"
+            data-pending-label="Ekleniyor…">Uzmanlık Ekle</button>
+  </form>
+</div>
+
+{% endblock %}

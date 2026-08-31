@@ -1,0 +1,139 @@
+{# =====================================================================
+   ORTA KOLON — CONVERSATION. Ekranın ANA çalışma alanıdır.
+
+   Tek büyük beyaz kart:
+     header  : requester avatar + adı, alt satırda "Talep #N · Konu",
+               sağda YALNIZCA ayarlar ikonu.
+               TELEFON İKONU YOKTUR — sistemde arama işlevi yok; dead action
+               üretmiyoruz (A6).
+     thread  : her mesaj avatar + gönderen adı + saat + balon
+     composer: AÇIK temalı input + "Gönder" pill butonu
+
+   ÇÖZÜLMÜŞ TALEP (A9): mesaj kutusu KALDIRILIR, yerine bilgi alanı ve
+   "Talebi yeniden aç" butonu gelir. Bu yalnızca sunum değildir — backend de
+   çözülmüş talebe public yanıtı REDDEDER (webapp.reply). Yani reopen
+   yapılmadan yeni yanıt gönderilemez.
+   ===================================================================== #}
+
+<section class="convo" aria-label="Talep konuşması">
+
+  <header class="convo-header">
+    <span class="avatar" style="background:{{ ticket.full_name|avatar_color }};"
+          aria-hidden="true">{{ ticket.full_name|avatar_initials }}</span>
+    <div class="convo-who">
+      <p class="convo-name">{{ ticket.full_name }}</p>
+      <p class="convo-sub">Talep #{{ ticket.id }} · {{ ticket.subject }}</p>
+    </div>
+
+    <div class="convo-actions">
+      <span class="status-pill status-{{ ticket.status }}">{{ STATUS_LABELS[ticket.status] }}</span>
+      <button type="button" class="icon-btn" data-drawer-open="ticket-settings"
+              aria-haspopup="dialog" aria-controls="ticket-settings"
+              title="Talep ayarları">
+        <span class="sr-only">Talep ayarları</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
+             stroke-linecap="round" aria-hidden="true">
+          <path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h8M16 18h4"/>
+          <circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="14" cy="18" r="2"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="convo-thread" id="thread">
+    {% if ticket.ai_suggestion %}
+    <div class="ai-box">
+      <div class="ai-box-title">Gemini'nin Otomatik Önerisi</div>
+      <div class="ai-box-body">{{ ticket.ai_suggestion }}</div>
+      {% if ticket.escalated %}
+        <div class="ai-box-note">Kullanıcı bu öneriyi yetersiz buldu; talep teknik ekibe aktarıldı.</div>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {% for m in messages %}
+    {% set sender = m.sender_full_name or m.sender_name %}
+    <article class="msg msg-{{ m.sender_type }}{{ ' msg-internal' if m.message_kind == INTERNAL_NOTE_KIND else '' }}">
+      <span class="mini-avatar" style="background:{{ sender|avatar_color }};"
+            aria-hidden="true">{{ sender|avatar_initials }}</span>
+      <div class="msg-body-col">
+        {# Kim yazdı YALNIZCA renkle anlaşılmaz: gönderen adı ve rolü her
+           mesajda açık metin olarak yazılıdır (WCAG 1.4.1). #}
+        <div class="msg-meta">
+          <span class="msg-sender">{{ sender }}</span>
+          <span class="msg-role">
+            {%- if m.sender_type == 'kullanici' %}Talep Sahibi
+            {%- elif m.sender_type == 'ai' %}AI Asistan
+            {%- elif m.sender_role == 'admin' %}Yönetici
+            {%- elif m.sender_role == 'technician' %}Teknik Ekip
+            {%- elif m.sender_type == 'teknisyen' %}Teknik Ekip
+            {%- elif m.sender_type == 'yonetici' %}Yönetici
+            {%- else %}Sistem{% endif -%}
+          </span>
+          {%- if m.message_kind == INTERNAL_NOTE_KIND %}
+            <span class="note-badge">Dahili Not · kullanıcı görmez</span>
+          {%- elif m.message_kind == 'ai_solution' %}
+            <span class="kind-tag kind-solution">çözüm denemesi</span>
+          {%- elif m.message_kind == 'ai_clarification' %}
+            <span class="kind-tag kind-clarification">açıklayıcı soru</span>
+          {%- endif %}
+          <span class="msg-time">{{ m.created_at }}</span>
+          {% if m.delivery_status == 'basarisiz' %}
+            <span class="delivery-badge delivery-failed"
+                  title="{{ m.delivery_error }}">Kullanıcıya iletilemedi</span>
+          {% elif m.delivery_status == 'gonderiliyor' %}
+            <span class="delivery-badge delivery-pending">Gönderim doğrulanmadı</span>
+          {% endif %}
+        </div>
+        <div class="bubble"><p class="msg-body">{{ m.message_text }}</p></div>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+
+  {% if ticket.status == STATUS.CLOSED %}
+    {# A9: çözülmüş talepte MESAJ KUTUSU YOKTUR. #}
+    <div class="resolved-note">
+      <p>Bu talep çözüldü.</p>
+      {% if can_manage %}
+      <form method="post" action="{{ url_for('reopen', ticket_id=ticket.id) }}" data-guard>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_token" value="{{ form_token() }}">
+        <button type="submit" class="btn btn-primary" data-pending-label="Açılıyor…">
+          Talebi yeniden aç
+        </button>
+      </form>
+      {% else %}
+      <p class="field-hint">
+        Yeniden açma yetkisi ana sorumlu ve yöneticilerdedir.
+      </p>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="composer">
+      <p class="composer-identity">
+        <span class="mini-avatar" style="background:{{ current_user.full_name|avatar_color }};"
+              aria-hidden="true">{{ current_user.full_name|avatar_initials }}</span>
+        {{ current_user.full_name }} ·
+        {{ 'Yönetici' if current_user.is_admin else 'Teknik Ekip' }} adına gönderiliyor
+      </p>
+      <form class="composer-row" method="post"
+            action="{{ url_for('reply', ticket_id=ticket.id) }}" data-guard>
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="form_token" value="{{ form_token() }}">
+        <label class="sr-only" for="message">Yanıt</label>
+        <textarea class="composer-input" id="message" name="message" rows="1"
+                  placeholder="Yanıtınızı yazın…" aria-describedby="message_hint"
+                  required></textarea>
+        <button type="submit" class="composer-send" data-pending-label="Gönderiliyor…">
+          Gönder
+        </button>
+      </form>
+      <p class="composer-note" id="message_hint">
+        Yanıt, Telegram üzerinden doğrudan talep sahibine iletilir. Dahili not
+        yazmak için sağ üstteki <strong>talep ayarları</strong>nı kullanın.
+      </p>
+    </div>
+  {% endif %}
+
+</section>

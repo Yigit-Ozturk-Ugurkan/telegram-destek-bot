@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Yetkiniz yok — Destek Masası{% endblock %}
+{% block content %}
+<div class="empty-state">
+  <h1>403 — Bu talebe erişim yetkiniz yok</h1>
+  <p class="muted">
+    Bu talep size atanmamış. Teknisyenler yalnızca kendilerine atanmış talepleri
+    görüntüleyebilir. Bir hata olduğunu düşünüyorsanız yöneticinize başvurun.
+  </p>
+  <p><a class="btn btn-secondary" href="{{ url_for('index') }}">Kendi taleplerime dön</a></p>
+</div>
+{% endblock %}
