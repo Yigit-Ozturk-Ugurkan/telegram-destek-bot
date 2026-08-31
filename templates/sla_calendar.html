@@ -17,8 +17,19 @@
   </p>
 </div>
 
-<div class="detail-grid">
-  <div class="thread-col">
+{# =====================================================================
+   LAYOUT
+     ÜST : Tatiller  -> shell genişliğinde tam boy bölüm
+     ALT : Tatil Ekle | Çalışma Saatleri -> dengeli iki kolon
+
+   Eski `.detail-grid` / `.thread-col` sarmalayıcılarının CSS karşılığı YOKTU;
+   bölümler blok akışında alt alta dizilip sağda kocaman boş alan bırakıyordu.
+   Yerlerini paylaşılan `.page-block` / `.page-split` ilkelleri aldı.
+
+   SLA hesaplamaları, business calendar, timezone ve holiday logic DEĞİŞMEDİ;
+   formlar, rotalar ve CSRF alanları aynen korunur.
+   ===================================================================== #}
+<section class="page-block">
     <h2 class="col-title">Tatiller</h2>
     {% if holidays %}
     <div class="table-scroll">
@@ -60,6 +71,9 @@
     {% else %}
       <div class="empty-state"><p>Henüz tatil tanımlanmadı.</p></div>
     {% endif %}
+</section>
+
+<div class="page-split is-side-first">
 
     <div class="action-card form-card">
       <h2 class="col-title">Tatil Ekle</h2>
@@ -79,9 +93,7 @@
                 data-pending-label="Ekleniyor…">Tatil Ekle</button>
       </form>
     </div>
-  </div>
 
-  <div class="action-col">
     <div class="action-card">
       <h2 class="col-title">Çalışma Saatleri</h2>
       <dl class="hours-list">
@@ -103,7 +115,7 @@
         döngülerine uygulanır; açık taleplerin son tarihleri korunur.
       </p>
     </div>
-  </div>
+
 </div>
 
 {% endblock %}

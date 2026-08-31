@@ -72,6 +72,24 @@
   --radius: 14px;
   --pill: 999px;
 
+  /* ---- GLOBAL SHELL — TEK YATAY HİZALAMA KAYNAĞI ----
+
+     Navbar pill'i, standart `.page` gövdesi, flash bandı ve talep
+     `.workspace` kutusu AYNI sol/sağ sınırı paylaşır. Bu iki değer TEK
+     yerde tanımlanır; hiçbir selector 1560/24 sayısını tekrar yazmaz.
+
+         |<- shell-padding-x ->[  shell content  ]<- shell-padding-x ->|
+                               ^                 ^
+                          NAVBAR LEFT       NAVBAR RIGHT
+                          PAGE   LEFT       PAGE   RIGHT
+
+     --shell-content-width, gutter'ı ZATEN taşıyan bir sarmalayıcının
+     (`.appbar`, `.flash-region`) içinde duran kutular içindir; türetilmiştir,
+     elle yazılmaz. */
+  --shell-max-width: 1560px;
+  --shell-padding-x: 24px;
+  --shell-content-width: calc(var(--shell-max-width) - 2 * var(--shell-padding-x));
+
   /* TALEPLER EKRANI kolon genişlikleri:
        sol ticket listesi | esneyen conversation | sağ context paneli
      Orta kolon EN GENİŞ alandır; iki yan kolon sabit ve dardır. */
@@ -133,19 +151,22 @@ h1, h2, h3 { line-height: 1.3; }
    eklenmez).
    ================================================================== */
 
+/* Yatay gutter ve genişlik GLOBAL SHELL bloğundan gelir (bkz. SAYFA
+   GÖVDESİ); burada yalnızca dikey ölçü ve yığın sırası tanımlanır. */
 .appbar {
   position: sticky;
   top: 0;
   z-index: 60;
-  padding: 14px 24px 10px;
+  padding-block: 14px 10px;
 }
 
+/* Pill'in DIŞ kenarı, altındaki sayfa içeriğinin sol/sağ sınırıyla
+   birebir çakışır; genişliği shell bloğundan alır. 20px yalnızca pill'in
+   KENDİ iç kroması olup hizalama kaynağı DEĞİLDİR. */
 .navbar {
   display: flex;
   align-items: center;
   gap: 18px;
-  max-width: 1560px;
-  margin: 0 auto;
   padding: 10px 20px;
   background: var(--glass);
   -webkit-backdrop-filter: saturate(150%) blur(10px);
@@ -312,11 +333,67 @@ h1, h2, h3 { line-height: 1.3; }
    SAYFA GÖVDESİ
    ================================================================== */
 
-.page {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 8px 24px 56px;
+/* ---- GLOBAL SHELL — dış gutter'ı KENDİ taşıyan kutular ----
+
+   `<body>`'nin doğrudan çocukları. Genişlik ve yatay padding TEK kaynaktan
+   (`--shell-*`) gelir; sayfaya özel dar bir merkez kolon YOKTUR.
+
+   ROOT CAUSE (giderildi): `.page` burada `max-width: 1100px` ile navbar'dan
+   ~460px dar, bağımsız bir merkez kolon oluşturuyordu; Ekip/Uzmanlık/SLA
+   ekranları bu yüzden navbar'ın ortasında sıkışıyordu. */
+.page,
+.workspace {
+  width: 100%;
+  max-width: var(--shell-max-width);
+  margin-inline: auto;
+  padding-inline: var(--shell-padding-x);
 }
+
+/* ---- GLOBAL SHELL — gutter'ı SARMALAYICIDAN alan kutular ----
+
+   `.appbar` / `.flash-region` tam genişlikte durur (sticky bant, tam boy
+   arka plan); içindeki kutu shell içerik genişliğine oturur. Sonuç:
+   NAVBAR LEFT == PAGE LEFT == WORKSPACE LEFT (her bantta). */
+.appbar,
+.flash-region {
+  padding-inline: var(--shell-padding-x);
+}
+.navbar,
+.flash-stack {
+  width: 100%;
+  max-width: var(--shell-content-width);
+  margin-inline: auto;
+}
+
+.page { padding-block: 8px 56px; }
+
+/* ---- SAYFA İÇİ BÖLÜMLER — shell genişliğinin İÇİNİ paylaştırır ----
+
+   Uzmanlıklar ve SLA Takvimi ekranları bu iki ilkeli PAYLAŞIR; hiçbirine
+   özel max-width/margin yazılmaz. Dış sınır her zaman `.page` shell'idir.
+
+     .page-block  → tam genişlik bölüm (SLA: Tatiller tablosu)
+     .page-split  → geniş ana alan + dar yan alan
+                    (Uzmanlıklar: tablo | Yeni Uzmanlık Ekle)
+     .is-side-first → dar sütun ÖNDE
+                    (SLA alt bölümü: Tatil Ekle | Çalışma Saatleri) */
+.page-block { margin-bottom: 18px; }
+
+.page-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(300px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+.page-split.is-side-first {
+  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.6fr);
+}
+/* minmax(0, …) + min-width: 0 — geniş tablo sütunu şişirip yatay taşma
+   yapamaz; taşma `.table-scroll` içinde çözülür. */
+.page-split > * { min-width: 0; }
+/* Izgara hücresindeki form kartı sütununu doldurur; TEK BAŞINA duran
+   `.form-card` (şifre değiştir, yeni teknisyen) 420px kalır. */
+.page-split > .form-card { max-width: none; }
 
 /* TALEPLER EKRANI — 250px | minmax(0,1fr) | 240px
    Orta kolon en önemli ve en geniş alandır. minmax(0,1fr) sayesinde uzun bir
@@ -325,9 +402,7 @@ h1, h2, h3 { line-height: 1.3; }
   display: grid;
   grid-template-columns: var(--list-w) minmax(0, 1fr) var(--ctx-w);
   gap: 16px;
-  max-width: 1560px;
-  margin: 0 auto;
-  padding: 8px 24px 32px;
+  padding-block: 8px 32px;
   align-items: start;
 }
 /* Kolonlar flex-column: sabit başlıklar akışta kalır, TEK bir çocuk
@@ -348,12 +423,10 @@ h1, h2, h3 { line-height: 1.3; }
   gap: 12px;
 }
 
-.flash-region { padding: 0 24px; }
 .flash-stack {
   display: grid;
   gap: 8px;
-  max-width: 1560px;
-  margin: 0 auto 14px;
+  margin-bottom: 14px;
 }
 .flash-stack:empty { display: none; }
 .flash {
@@ -1186,6 +1259,11 @@ textarea:focus-visible {
 
 .table-scroll {
   overflow-x: auto;               /* taşan tablo KENDİ kabında kayar */
+  /* position: relative KRİTİK — `.sr-only` (position: absolute) aksi hâlde
+     konumunu VIEWPORT'tan alır, `overflow-x` tarafından KIRPILMAZ ve dar
+     ekranda sayfayı yatay kaydırılabilir yapar. Kabı konumlandırılmış
+     yaparak ekran okuyucu metni de tablo ile birlikte kırpılır. */
+  position: relative;
   background: var(--surface);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow-card);
@@ -1223,12 +1301,17 @@ textarea:focus-visible {
    EKİP SAYFASI (/ekip) ve UZMANLIK KARTLARI
    ================================================================== */
 
+/* Shell genişliğinde ızgara: geniş masaüstünde 4-5 kart, orta bantta 3,
+   dar bantta 2, mobilde 1. Kolon sayısı auto-fit ile KULLANILABİLİR
+   GENİŞLİKTEN türer — sabit bir kolon sayısı ya da dar merkez kolon yoktur. */
 .team-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 14px;
 }
-.team-card { padding: 18px; }
+/* auto-fit az kart varken boş track'leri toplar ve kalanları tüm satıra
+   yayardı; kart genişliği anlamsız büyümesin diye üst sınır. */
+.team-card { padding: 18px; max-width: 420px; }
 .team-avatar {
   width: 44px;
   height: 44px;
@@ -1296,6 +1379,11 @@ textarea:focus-visible {
   list-style: none;
   margin: 0;
   padding: 0;
+  /* `.table-scroll` ile AYNI gerekçe: satırdaki `.sr-only` (position:
+     absolute) konumunu viewport'tan alıp kayan listenin dışına taşar ve
+     sayfayı 100dvh kilidinin ötesine uzatırdı. Kabı konumlandırılmış yapmak
+     ekran okuyucu metnini listeyle birlikte kırpar. */
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -1665,18 +1753,23 @@ textarea:focus-visible {
    App shell burada da KAPALIDIR: body normal akar, hiçbir bölge scroll
    kilidiyle erişilemez hâle gelmez. */
 @media (max-width: 860px) {
+  /* Dar ekranda gutter daralır — DEĞER TEK YERDE. Navbar, page, flash ve
+     workspace bu bantta da aynı sol/sağ sınırda kalır. */
+  :root { --shell-padding-x: 14px; }
+
   body { height: auto; overflow: visible; display: block; }
-  .appbar { position: sticky; padding: 10px 12px 8px; }
+  .appbar { position: sticky; padding-block: 10px 8px; }
   .navbar { gap: 10px; padding: 8px 12px; }
   .nav-brand-label { display: none; }
   .workspace {
     grid-template-columns: minmax(0, 1fr);
-    padding: 8px 14px 28px;
+    padding-block: 8px 28px;
     gap: 12px;
   }
   .ws-context { grid-column: auto; }
-  .page { padding: 8px 14px 40px; }
-  .flash-region { padding: 0 14px; }
+  .page { padding-block: 8px 40px; }
+  .page-split,
+  .page-split.is-side-first { grid-template-columns: minmax(0, 1fr); }
   .ticket-cards { max-height: none; }
   .convo-thread { max-height: none; }
   .drawer { width: 100%; }

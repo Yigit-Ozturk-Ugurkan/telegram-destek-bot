@@ -17,6 +17,7 @@ from tests import _support
 _support.setup_test_db("queuefifo")
 
 import unittest
+from datetime import datetime
 
 import config
 import db
@@ -25,6 +26,24 @@ import queue_worker
 import routing
 import sla_calendar
 from tests._support import DbTestCase, RecordingSender
+
+
+# ==================================================================
+# SABİT HAFTA SONU SENARYOSU
+#
+# Bu paketteki takvim kontrolleri MAKİNENİN TARİHİNDEN BAĞIMSIZDIR:
+# aşağıdaki damgalar sabittir ve üretim kodundaki now() yerine doğrudan
+# sla_calendar'a girdi olarak verilir.
+#
+#   2026-08-29 Cumartesi  — BUSINESS_HOURS[5] = None  (kapalı)
+#   2026-08-30 Pazar      — BUSINESS_HOURS[6] = None  (kapalı)
+#   2026-08-31 Pazartesi  — BUSINESS_HOURS[0] = 08:00-18:00 (açık)
+# ==================================================================
+
+WEEKEND_SATURDAY = "2026-08-29"
+WEEKEND_SUNDAY = "2026-08-30"
+FOLLOWING_MONDAY = "2026-08-31"
+MONDAY_OPENS_AT = (8, 0)
 
 
 class QueueOrderTestCase(DbTestCase):
@@ -205,17 +224,97 @@ class TestWeekendBacklogExample(QueueOrderTestCase):
             assigned_order,
             [self.ticket_c, self.ticket_d, self.ticket_a, self.ticket_b])
 
+    # ---------- C1.1: hafta sonu SLA iş saati tüketmez ----------
+    #
+    # DETERMİNİZM NOTU
+    # ----------------
+    # Bu üç kontrol SABİT damgalarla çalışır. Eski tek test,
+    # `db.start_sla_cycle_business()` içindeki now() değerini ölçtüğü için
+    # yalnızca Cuma 18:00 - Pazartesi 18:00 arasında geçiyordu; haftanın
+    # kalanında "İlk çalışma anı Pazartesi olmalı" beklentisi kırılıyordu.
+    # Üretim davranışı DEĞİŞMEDİ — yalnız girdi sabitlendi.
+
+    def _tz_datetime(self, gun: str, saat: int, dakika: int = 0):
+        """'YYYY-AA-GG' + saat -> SLA saat diliminde aware datetime."""
+        return sla_calendar.to_aware("%s %02d:%02d:00" % (gun, saat, dakika))
+
+    def test_11a_weekend_days_are_closed_and_monday_is_open(self):
+        """Senaryonun ön koşulu: senaryo günleri beklendiği gibi.
+
+        Takvim tatil tablosundan da beslendiği için önce cache tazelenir;
+        bu paketin DB'sinde tatil YOKTUR."""
+        sla_calendar.invalidate_cache()
+        self.addCleanup(sla_calendar.invalidate_cache)
+
+        cumartesi = datetime.strptime(WEEKEND_SATURDAY, "%Y-%m-%d").date()
+        pazar = datetime.strptime(WEEKEND_SUNDAY, "%Y-%m-%d").date()
+        pazartesi = datetime.strptime(FOLLOWING_MONDAY, "%Y-%m-%d").date()
+
+        self.assertEqual((cumartesi.weekday(), pazar.weekday(),
+                          pazartesi.weekday()), (5, 6, 0))
+        self.assertIsNone(sla_calendar.business_window(cumartesi),
+                          "Cumartesi kapalı olmalı.")
+        self.assertIsNone(sla_calendar.business_window(pazar),
+                          "Pazar kapalı olmalı.")
+        self.assertIsNotNone(sla_calendar.business_window(pazartesi),
+                             "Pazartesi açık olmalı.")
+
     def test_11_weekend_does_not_consume_business_sla(self):
-        """Mesai dışı zaman SLA saatini TÜKETMEZ (mevcut davranış korunur)."""
+        """Mesai dışı zaman SLA saatini TÜKETMEZ (mevcut davranış korunur).
+
+        Hafta sonunun HERHANGİ bir anında açılan sayaç, takip eden
+        Pazartesi çalışma başlangıcında işlemeye başlar."""
+        sla_calendar.invalidate_cache()
+        self.addCleanup(sla_calendar.invalidate_cache)
+
+        pazartesi_acilis = self._tz_datetime(FOLLOWING_MONDAY, *MONDAY_OPENS_AT)
+
+        senaryo = [
+            (WEEKEND_SATURDAY, 10, "Cumartesi 10:00 — Ticket A"),
+            (WEEKEND_SATURDAY, 14, "Cumartesi 14:00 — Ticket B"),
+            (WEEKEND_SUNDAY, 9, "Pazar 09:00 — Ticket C"),
+            (WEEKEND_SUNDAY, 18, "Pazar 18:00 — Ticket D"),
+        ]
+        for gun, saat, etiket in senaryo:
+            with self.subTest(an=etiket):
+                eskalasyon = self._tz_datetime(gun, saat)
+                self.assertFalse(sla_calendar.is_business_time(eskalasyon),
+                                 "Hafta sonu mesai saati DEĞİLDİR.")
+
+                effective = sla_calendar.next_business_time(eskalasyon)
+                self.assertEqual(effective, pazartesi_acilis,
+                                 "İlk çalışma anı takip eden Pazartesi 08:00.")
+                self.assertEqual(effective.weekday(), 0,
+                                 "İlk çalışma anı Pazartesi olmalı.")
+                self.assertTrue(sla_calendar.is_business_time(effective))
+
+                # Hafta sonu boyunca HİÇ iş dakikası tüketilmez.
+                self.assertEqual(
+                    sla_calendar.business_minutes_between(eskalasyon,
+                                                          pazartesi_acilis), 0,
+                    "Hafta sonu geçen süre SLA saatini tüketmemeli.")
+
+    def test_11b_open_cycle_never_starts_before_a_business_moment(self):
+        """Cycle seviyesindeki ZAMANDAN BAĞIMSIZ değişmezler.
+
+        Gerçek `effective_started_at` çalıştırma anına bağlıdır; bu yüzden
+        BURADA takvim günü DEĞİL, sözleşme doğrulanır: mod iş takvimidir,
+        sayaç bir mesai anında başlar ve gerçek eskalasyon anından geri
+        gitmez (mesai dışı zaman tüketilmez)."""
         cycle = db.get_active_cycle(self.ticket_c)
         self.assertIsNotNone(cycle)
         self.assertEqual(cycle["calendar_mode"], config.CALENDAR_MODE_BUSINESS)
 
-        # Cumartesi 10:00'da eskalasyon -> sayaç Pazartesi mesai başında işler.
+        started = sla_calendar.to_aware(cycle["started_at"])
         effective = sla_calendar.to_aware(cycle["effective_started_at"])
         self.assertIsNotNone(effective)
-        self.assertEqual(effective.weekday(), 0, "İlk çalışma anı Pazartesi olmalı.")
-        self.assertTrue(sla_calendar.is_business_time(effective))
+        self.assertTrue(sla_calendar.is_business_time(effective),
+                        "Sayaç yalnızca mesai içinde işlemeye başlayabilir.")
+        self.assertGreaterEqual(effective, started,
+                                "Sayaç eskalasyon anından geriye kaydırılamaz.")
+        self.assertEqual(
+            effective, sla_calendar.next_business_time(started),
+            "effective_started_at = next_business_time(started_at).")
 
     def test_queue_entry_timestamp_is_preserved_while_waiting(self):
         before = db.get_ticket(self.ticket_a)["queue_entered_at"]

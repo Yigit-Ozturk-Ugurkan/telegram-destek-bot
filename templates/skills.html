@@ -11,7 +11,15 @@
   </p>
 </div>
 
+{# =====================================================================
+   LAYOUT: shell genişliğinde iki kolon — geniş tablo | dar ekleme formu.
+   Sayfaya özel max-width YOKTUR; dış sınır `.page` shell'idir.
+   Form işlemleri, CSRF alanları ve rotalar DEĞİŞMEDİ.
+   ===================================================================== #}
+<div class="page-split">
+
 {% if skills %}
+<div class="table-scroll">
 <table class="data-table">
   <caption class="sr-only">Tanımlı uzmanlıklar</caption>
   <thead>
@@ -46,6 +54,7 @@
     {% endfor %}
   </tbody>
 </table>
+</div>
 {% else %}
 <div class="empty-state"><p>Henüz uzmanlık tanımlanmadı.</p></div>
 {% endif %}
@@ -70,6 +79,8 @@
     <button type="submit" class="btn btn-primary btn-block"
             data-pending-label="Ekleniyor…">Uzmanlık Ekle</button>
   </form>
+</div>
+
 </div>
 
 {% endblock %}

@@ -1802,7 +1802,15 @@ class TestWorkspaceGeometryConsistency(FrontendTestCase):
     kutusu ve kolon ölçüleri AYNI kaynaktan gelir: templates/workspace_base.html
     ve tek bir `.workspace` kuralı. Bu paket o tekliği kalıcı olarak kilitler —
     ileride birine özel bir max-width/margin eklenirse test kırılır.
+
+    GLOBAL SHELL REVİZYONU: dış kutu artık `.page` ile PAYLAŞILAN tek bir
+    kuraldan ve `--shell-*` token'larından gelir. `.workspace`in kendine ait
+    bir genişliği YOKTUR; kilit bu yüzden "tek kural + token" üzerinedir.
+    Yasak olan hâlâ aynı: bir SAYFA/DURUM sınıfına bağlı workspace kuralı.
     """
+
+    #: dış kutuyu `.workspace` ile paylaşması meşru olan shell ortakları
+    SHELL_PARTNERS = {".page"}
 
     def _css_no_comments(self):
         return re.sub(r"/\*.*?\*/", "", self.css(), flags=re.S)
@@ -1860,10 +1868,18 @@ class TestWorkspaceGeometryConsistency(FrontendTestCase):
 
         self.assertEqual(len(geometry), 1,
                          f"Genişlik tek yerde tanımlanmalı, bulunan: {geometry}")
-        self.assertIn("max-width: 1560px", geometry[0])
-        self.assertIn("margin: 0 auto", geometry[0])
-        self.assertIn("padding: 8px 24px 32px", geometry[0])
-        self.assertIn("gap: 16px", geometry[0])
+        # Ölçü HARDCODE EDİLMEZ; global shell token'larından gelir.
+        self.assertIn("max-width: var(--shell-max-width)", geometry[0])
+        self.assertIn("padding-inline: var(--shell-padding-x)", geometry[0])
+        self.assertIn("margin-inline: auto", geometry[0])
+        self.assertNotIn("1560px", geometry[0],
+                         "Shell genişliği selector içinde tekrar yazılmamalı.")
+
+        dikey = [body for _sel, body in rules if "padding-block" in body]
+        self.assertTrue(any("8px 32px" in body for body in dikey),
+                        "Workspace dikey padding'i korunmalı.")
+        gap = [body for _sel, body in rules if "gap:" in body]
+        self.assertTrue(any("gap: 16px" in body for body in gap))
 
     def test_desktop_grid_template_columns_has_a_single_source(self):
         rules = self._workspace_rules()
@@ -1876,9 +1892,12 @@ class TestWorkspaceGeometryConsistency(FrontendTestCase):
         sınıfıyla NİTELENMEZ — yoksa iki ekran farklı genişlik alırdı."""
         for selector, _body in self._workspace_rules():
             for part in selector.split(","):
+                part = part.strip()
+                if part in self.SHELL_PARTNERS:
+                    continue          # paylaşılan global shell kuralı
                 self.assertEqual(
-                    part.strip(), ".workspace",
-                    f"Duruma özel workspace kuralı bulundu: {part.strip()!r}")
+                    part, ".workspace",
+                    f"Duruma özel workspace kuralı bulundu: {part!r}")
 
     # ---------- 4-5: token'lar ve margin state'ten bağımsız ----------
 
@@ -1903,7 +1922,7 @@ class TestWorkspaceGeometryConsistency(FrontendTestCase):
         margins = [body for _sel, body in self._workspace_rules()
                    if "margin" in body]
         self.assertEqual(len(margins), 1, "Tek margin tanımı olmalı.")
-        self.assertIn("margin: 0 auto", margins[0])
+        self.assertIn("margin-inline: auto", margins[0])
 
     def test_only_the_middle_column_content_differs_between_states(self):
         """State farkı YALNIZCA .ws-main içeriğindedir."""
@@ -2153,6 +2172,332 @@ class TestResponsive(FrontendTestCase):
         css = self.css()
         self.assertIn("minmax(0, 1fr)", css)
         self.assertIn(".ws-main { min-width: 0; }", css)
+
+
+# ==================================================================
+# 13. GLOBAL AUTHENTICATED LAYOUT — TEK YATAY SHELL
+#
+# Navbar görsel referanstır: sol/sağ içerik sınırı, max-width ve yatay
+# gutter TEK bir token çiftinden (`--shell-max-width`, `--shell-padding-x`)
+# gelir. Standart `.page` ekranları, ticket `.workspace`i ve flash bandı
+# aynı kaynaktan beslenir; sayfaya özel dar merkez kolon YOKTUR.
+#
+#   |<- shell-padding-x ->[  shell content  ]<- shell-padding-x ->|
+#                         ^                 ^
+#                    NAVBAR LEFT       NAVBAR RIGHT
+#                    PAGE   LEFT       PAGE   RIGHT
+# ==================================================================
+
+class TestGlobalShell(FrontendTestCase):
+
+    #: shell geometrisini paylaşan kutular
+    SHELL_BOXES = (".page", ".workspace", ".navbar", ".flash-stack")
+
+    def _css(self):
+        return re.sub(r"/\*.*?\*/", "", self.css(), flags=re.S)
+
+    def _rule(self, selector):
+        """Verilen selector'ı İÇEREN kuralların gövdelerini döner."""
+        bodies = []
+        for sel, body in re.findall(r"([^{}]*)\{([^}]*)\}", self._css()):
+            parts = [part.strip() for part in sel.strip().split(",")]
+            if selector in parts:
+                bodies.append(" ".join(body.split()))
+        return bodies
+
+    # ---------- 1-4: tek CSS kaynağı ----------
+
+    def test_shell_tokens_exist_and_are_defined_only_in_root(self):
+        css = self._css()
+        root_bodies = re.findall(r":root\s*\{([^}]*)\}", css)
+
+        for token in ("--shell-max-width", "--shell-padding-x",
+                      "--shell-content-width"):
+            with self.subTest(token=token):
+                self.assertIn(token + ":", css, f"{token} tanımlı olmalı.")
+                in_root = sum(body.count(token + ":") for body in root_bodies)
+                self.assertEqual(in_root, css.count(token + ":"),
+                                 f"{token} :root DIŞINDA tanımlanmış.")
+
+        self.assertIn("--shell-max-width: 1560px;", css)
+        self.assertIn("--shell-padding-x: 24px;", css)
+
+    def test_shell_width_is_never_hardcoded_in_a_selector(self):
+        """1560px YALNIZCA token tanımında geçer — selector'da tekrar edilmez."""
+        css = self._css()
+        self.assertEqual(css.count("1560px"), 1,
+                         "Shell genişliği birden fazla yerde yazılmış.")
+        self.assertNotIn("max-width: 1100px", css,
+                         "Eski dar merkez kolon geri gelmiş.")
+
+    def test_every_shell_box_derives_its_width_from_the_tokens(self):
+        for selector in self.SHELL_BOXES:
+            with self.subTest(selector=selector):
+                bodies = " ".join(self._rule(selector))
+                self.assertIn("max-width: var(--shell-", bodies,
+                              f"{selector} shell token'ı kullanmıyor.")
+                self.assertIn("margin-inline: auto", bodies)
+
+    def test_gutter_comes_from_the_token_on_every_band(self):
+        css = self._css()
+        for selector in (".page", ".workspace", ".appbar", ".flash-region"):
+            with self.subTest(selector=selector):
+                self.assertIn("padding-inline: var(--shell-padding-x)",
+                              " ".join(self._rule(selector)),
+                              f"{selector} gutter'ı token'dan almıyor.")
+
+        # Mobil bant token'ı EZER; selector'lar yeniden yazılmaz.
+        mobile = css[css.index("@media (max-width: 860px)"):]
+        mobile = mobile[:mobile.index("@media (max-width: 520px)")]
+        self.assertIn("--shell-padding-x: 14px", mobile)
+        self.assertNotIn("padding: 8px 14px", mobile,
+                         "Mobil gutter yeniden hardcode edilmiş.")
+
+    # ---------- 5-6: navbar == page == workspace ----------
+
+    def test_page_and_workspace_share_one_shell_rule(self):
+        css = self._css()
+        shared = re.search(r"\.page,\s*\.workspace\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(shared, ".page ve .workspace tek kuralı paylaşmalı.")
+        body = " ".join(shared.group(1).split())
+        self.assertIn("max-width: var(--shell-max-width)", body)
+        self.assertIn("padding-inline: var(--shell-padding-x)", body)
+        self.assertIn("margin-inline: auto", body)
+
+    def test_navbar_pill_sits_inside_the_shell_gutter(self):
+        """Navbar pill'i sarmalayıcısının gutter'ı içinde shell içerik
+        genişliğine oturur: NAVBAR LEFT == PAGE LEFT == WORKSPACE LEFT."""
+        css = self._css()
+        shared = re.search(r"\.navbar,\s*\.flash-stack\s*\{([^}]*)\}", css)
+        self.assertIsNotNone(shared)
+        self.assertIn("max-width: var(--shell-content-width)",
+                      " ".join(shared.group(1).split()))
+
+        navbar = " ".join(self._rule(".navbar"))
+        self.assertNotIn("max-width: 1", navbar,
+                         "Navbar kendi genişliğini hardcode etmemeli.")
+
+    def test_appbar_no_longer_owns_a_horizontal_gutter_of_its_own(self):
+        appbar = " ".join(self._rule(".appbar"))
+        self.assertIn("padding-block: 14px 10px", appbar)
+        self.assertNotIn("padding: 14px 24px", appbar)
+
+    # ---------- 7: admin ve technician aynı shell ----------
+
+    def test_admin_and_technician_use_the_same_shell_wrapper(self):
+        pages = ((self.admin_user, "/tickets"), (self.admin_user, "/ekip"),
+                 (self.admin_user, "/uzmanliklar"),
+                 (self.admin_user, "/sla-takvimi"),
+                 (self.hakan_user, "/my-tickets"),
+                 (self.hakan_user, "/collaborations"))
+        for user_id, path in pages:
+            with self.subTest(path=path):
+                html = self.render(user_id, path)
+                outer = re.search(r'<main class="(page|workspace)" id="main">', html)
+                self.assertIsNotNone(
+                    outer, f"{path} paylaşılan shell sarmalayıcısını kullanmıyor.")
+                self.assertEqual(
+                    count_class(html, "page") + count_class(html, "workspace"),
+                    1, f"{path} ikinci bir dış kutu eklemiş.")
+
+    def test_technician_screens_reuse_the_workspace_shell(self):
+        for path in ("/my-tickets", "/collaborations"):
+            with self.subTest(path=path):
+                html = self.render(self.hakan_user, path)
+                self.assertIn('<main class="workspace" id="main">', html)
+
+    # ---------- 8: yatay taşma ----------
+
+    def test_no_shell_box_can_cause_horizontal_page_overflow(self):
+        css = self._css()
+        body = re.search(r"\nbody\s*\{([^}]*)\}", css).group(1)
+        self.assertIn("overflow-x: hidden", body)
+        for selector in (".page", ".workspace"):
+            self.assertIn("width: 100%", " ".join(self._rule(selector)))
+        # border-box olmadan padding + max-width taşardı.
+        self.assertIn("* { box-sizing: border-box; }", css)
+
+
+class TestTeamPageGrid(FrontendTestCase):
+    """EKİP SAYFASI — shell genişliğinde ızgara; dar merkez kolon YOK."""
+
+    def _grid(self):
+        return " ".join(re.search(r"\.team-grid\s*\{([^}]*)\}",
+                                  self.css()).group(1).split())
+
+    def test_grid_columns_are_derived_from_the_available_width(self):
+        self.assertIn("repeat(auto-fit, minmax(260px, 1fr))", self._grid())
+
+    def test_wide_desktop_fits_at_least_four_cards(self):
+        """1560px shell içinde 260px'lik izler: 4-5 kolon çıkmalı."""
+        gap = int(re.search(r"gap:\s*(\d+)px", self._grid()).group(1))
+        icerik = 1560 - 2 * 24                      # shell content genişliği
+        kolon = (icerik + gap) // (260 + gap)
+        self.assertGreaterEqual(kolon, 4, f"Geniş ekranda {kolon} kart sığıyor.")
+        self.assertLessEqual(kolon, 5, "Kartlar anlamsız şekilde daralmamalı.")
+
+    def test_medium_and_narrow_bands_step_down_gracefully(self):
+        gap = 14
+        for icerik, beklenen in ((1052, 3), (740, 2), (492, 1)):
+            with self.subTest(width=icerik):
+                self.assertEqual((icerik + gap) // (260 + gap), beklenen)
+
+    def test_cards_do_not_stretch_absurdly_when_the_team_is_small(self):
+        card = re.search(r"\.team-card\s*\{([^}]*)\}", self.css()).group(1)
+        genislik = int(re.search(r"max-width:\s*(\d+)px", card).group(1))
+        self.assertTrue(360 <= genislik <= 520,
+                        f"Kart üst sınırı {genislik}px — makul bantta olmalı.")
+
+    def test_page_header_starts_at_the_shell_edge(self):
+        """Başlık ve açıklama shell'in sol sınırından başlar: `.board-head`
+        `.page`in DOĞRUDAN çocuğudur, araya dar bir sarmalayıcı girmez."""
+        html = self.render(self.admin_user, "/ekip")
+        govde = slice_between(html, '<main class="page" id="main">', "</main>")
+        self.assertIn("board-head", re.search(r'<div class="([^"]+)"',
+                                              govde).group(1))
+
+    def test_team_card_actions_are_unchanged(self):
+        html = self.render(self.admin_user, "/ekip")
+        for action in ("/toggle", "/gecici-sifre", "/hesap", "/uzmanlik"):
+            self.assertIn(action, html, f"{action} formu kaybolmuş.")
+        forms = collect_forms(html)
+        self.assertGreater(len(forms.post_forms), 0)
+        for form in forms.post_forms:
+            self.assertIn("csrf_token", form["inputs"], form["action"])
+
+
+class TestSkillsPageLayout(FrontendTestCase):
+    """UZMANLIKLAR — tablo dar merkez kolonda kalmaz; form dengeli durur."""
+
+    def test_content_uses_the_shared_two_column_primitive(self):
+        html = self.render(self.admin_user, "/uzmanliklar")
+        self.assertEqual(count_class(html, "page-split"), 1)
+        self.assertEqual(count_class(html, "page"), 1,
+                         "Sayfaya özel ikinci bir dış kutu olmamalı.")
+
+    def test_table_is_not_trapped_in_a_narrow_column(self):
+        css = re.sub(r"/\*.*?\*/", "", self.css(), flags=re.S)
+        split = " ".join(re.search(r"\.page-split\s*\{([^}]*)\}",
+                                   css).group(1).split())
+        self.assertIn("minmax(0, 1.6fr)", split, "Ana alan geniş olmalı.")
+        self.assertIn("minmax(300px, 0.8fr)", split, "Yan alan dar olmalı.")
+        self.assertNotIn("max-width", split,
+                         "Bölüm ilkelinin kendi max-width'i olmamalı.")
+
+    def test_table_scrolls_inside_its_own_container(self):
+        html = self.render(self.admin_user, "/uzmanliklar")
+        self.assertEqual(count_class(html, "table-scroll"), 1,
+                         "Tablo kendi kayan kabında olmalı.")
+
+    def test_add_form_fills_its_grid_cell(self):
+        css = re.sub(r"/\*.*?\*/", "", self.css(), flags=re.S)
+        self.assertIn(".page-split > .form-card { max-width: none; }", css)
+        # Tek başına duran form kartı (şifre değiştir, yeni teknisyen) dar kalır.
+        self.assertIn(".form-card { padding: 22px; max-width: 420px;", css)
+
+    def test_skill_forms_and_csrf_are_unchanged(self):
+        html = self.render(self.admin_user, "/uzmanliklar")
+        forms = collect_forms(html)
+        self.assertGreater(len(forms.post_forms), 0)
+        for form in forms.post_forms:
+            self.assertIn("csrf_token", form["inputs"], form["action"])
+            self.assertIn("form_token", form["inputs"], form["action"])
+
+
+class TestSlaCalendarLayout(FrontendTestCase):
+    """SLA TAKVİMİ — üstte tam genişlik tatiller, altta dengeli iki kolon."""
+
+    def test_dead_wrapper_classes_are_gone(self):
+        with open(project_file("templates", "sla_calendar.html"),
+                  encoding="utf-8") as fh:
+            template = fh.read()
+        for dead in ('class="detail-grid"', 'class="thread-col"'):
+            self.assertNotIn(dead, template,
+                             f"{dead}: CSS karşılığı olmayan ölü sarmalayıcı.")
+
+    def test_holidays_span_the_full_shell_width(self):
+        html = self.render(self.admin_user, "/sla-takvimi")
+        self.assertEqual(count_class(html, "page-block"), 1)
+        blok = slice_between(html, 'class="page-block"', 'class="page-split')
+        self.assertIn("Tatiller", blok)
+
+    def test_bottom_row_is_a_balanced_two_column_section(self):
+        html = self.render(self.admin_user, "/sla-takvimi")
+        self.assertEqual(count_class(html, "page-split"), 1)
+        self.assertIn('class="page-split is-side-first"', html)
+
+        alt = html[html.index('class="page-split is-side-first"'):]
+        self.assertLess(alt.index("Tatil Ekle"), alt.index("Çalışma Saatleri"),
+                        "Dar sütun (Tatil Ekle) önde olmalı.")
+
+        css = re.sub(r"/\*.*?\*/", "", self.css(), flags=re.S)
+        ters = re.search(r"\.page-split\.is-side-first\s*\{([^}]*)\}",
+                         css).group(1)
+        self.assertIn("minmax(300px, 0.8fr) minmax(0, 1.6fr)",
+                      " ".join(ters.split()))
+
+    def test_business_hours_and_timezone_output_is_unchanged(self):
+        html = self.render(self.admin_user, "/sla-takvimi")
+        for gun in ("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma",
+                    "Cumartesi", "Pazar"):
+            self.assertIn(gun, html)
+        self.assertIn("Saat dilimi:", html)
+
+    def test_holiday_forms_and_csrf_are_unchanged(self):
+        html = self.render(self.admin_user, "/sla-takvimi")
+        forms = collect_forms(html)
+        self.assertGreater(len(forms.post_forms), 0)
+        for form in forms.post_forms:
+            self.assertIn("csrf_token", form["inputs"], form["action"])
+
+
+class TestPageSectionsResponsive(FrontendTestCase):
+    """Yeni sayfa ilkelleri mevcut breakpoint'lerle ÇAKIŞMAZ."""
+
+    def test_split_collapses_in_the_existing_mobile_band(self):
+        css = self.css()
+        mobile = css[css.index("@media (max-width: 860px)"):]
+        mobile = mobile[:mobile.index("@media (max-width: 520px)")]
+        self.assertIn(".page-split,", mobile)
+        self.assertIn("grid-template-columns: minmax(0, 1fr);", mobile)
+
+    def test_no_new_breakpoint_was_introduced(self):
+        css = self.css()
+        bantlar = sorted(
+            set(re.findall(r"@media \((?:min|max)-width: (\d+)px\)", css)))
+        self.assertEqual(bantlar, ["1180", "1181", "1700", "520", "860"],
+                         f"Breakpoint listesi değişmiş: {bantlar}")
+
+    def test_split_children_cannot_overflow_horizontally(self):
+        css = re.sub(r"/\*.*?\*/", "", self.css(), flags=re.S)
+        self.assertIn(".page-split > * { min-width: 0; }", css)
+
+    def test_scroll_containers_clip_their_absolutely_positioned_children(self):
+        """`.sr-only` position: absolute'tur; konumlandırılmamış bir kapta
+        containing block VIEWPORT olur, `overflow` tarafından KIRPILMAZ ve
+        sayfayı kaydırılabilir yapar.
+
+        Ölçüm (Chrome): düzeltmeden önce /uzmanliklar 500px'te 73px yatay,
+        /ticket/<id> 1920x900'de 71px dikey kayabiliyordu. Kabı
+        konumlandırılmış yapmak ikisini de sıfırlar."""
+        css = self._css_no_comments()
+        for selector in (".table-scroll", ".team-rail-list"):
+            with self.subTest(selector=selector):
+                body = re.search(
+                    re.escape(selector) + r"\s*\{([^}]*)\}", css).group(1)
+                self.assertIn("position: relative", body,
+                              f"{selector} mutlak konumlu çocuğunu kırpmalı.")
+        # Kırpmanın anlamlı olması için her iki kap da kayan bölgedir
+        # (`.team-rail-list` overflow'unu desktop app shell bandından alır).
+        self.assertIn("overflow-x: auto",
+                      re.search(r"\.table-scroll\s*\{([^}]*)\}", css).group(1))
+        shell = css[css.index("@media (min-width: 1181px)"):]
+        shell = shell[:shell.index("@media (min-width: 1700px)")]
+        rail = re.search(r"\.team-rail-list\s*\{([^}]*)\}", shell).group(1)
+        self.assertIn("overflow-y: auto", rail)
+
+    def _css_no_comments(self):
+        return re.sub(r"/\*.*?\*/", "", self.css(), flags=re.S)
 
 
 if __name__ == "__main__":
