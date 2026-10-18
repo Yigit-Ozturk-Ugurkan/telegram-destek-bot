@@ -50,8 +50,9 @@ herkese açık bir HTTPS adresi gerekir).
 
 ### 4. Ortam değişkenleri
 
-Proje klasöründe bir `.env` dosyası yerine, doğrudan ortam değişkeni olarak ayarlayabilir
-ya da `config.py` içine sabit değer olarak yazabilirsiniz:
+`.env.example` dosyasını `.env` adıyla kopyalayıp kendi ayarlarınızı girin.
+Gerçek ortam değişkenleri `.env` değerlerinin önüne geçer.
+Token, API anahtarı ve parolaları kaynak koda yazmayın veya Git'e eklemeyin.
 
 ```bash
 export BOT_TOKEN="123456789:AAExxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
@@ -108,6 +109,12 @@ python bot.py
 
 # Terminal 2 — Web paneli
 python webapp.py
+
+# Terminal 3 — bekleyen talepleri periyodik değerlendiren worker
+python queue_worker.py --loop
+
+Tek seferlik kuyruk değerlendirmesi için `python queue_worker.py` kullanılabilir.
+Bot, web paneli ve worker aynı SQLite veritabanını kullanmalıdır.
 ```
 
 Web paneli varsayılan olarak `http://localhost:5000` adresinde açılır.
@@ -233,10 +240,18 @@ loglarında `#42` biçimi korunur.
 buraya "Yardımcı Sorumlu" olarak kaydedilir — Sorumlu değişmez, ama hem web panelde hem
 gerekirse bildirimlerde görünür kılınabilir.
 
+## Öncelik ve SLA Takibi
+
+Talepler P1–P4 öncelikleriyle yönetilir. AI öncelik önerileri sunucu
+kurallarıyla doğrulanır; yetkili kullanıcılar önceliği değiştirebilir.
+
+SLA süreleri iş takvimi ve tatiller dikkate alınarak hesaplanır.
+Kullanıcı yanıtı beklenirken sayaç duraklatılabilir; yeniden açılan
+talepler için yeni SLA döngüsü oluşturulur.
+
 ## Sonraki adımlar için öneriler
 
 - Şifre sıfırlama (e-posta ile) ve iki faktörlü doğrulama eklenebilir.
 - Yoğun trafikte SQLite yerine PostgreSQL kullanılabilir.
 - Webhook moduna geçmek isterseniz `bot.py` içindeki `application.run_polling()` satırı
   `application.run_webhook(...)` ile değiştirilip bir HTTPS endpoint tanımlanmalıdır.
-- SLA takibi, otomatik hatırlatmalar veya kategori/etiket sistemi eklenebilir.
